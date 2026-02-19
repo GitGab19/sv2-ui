@@ -14,7 +14,7 @@
 export interface ServerExtendedChannelInfo {
   channel_id: number;
   user_identity: string;
-  nominal_hashrate: number;
+  nominal_hashrate: number | null;
   target_hex: string;
   extranonce_prefix_hex: string;
   full_extranonce_size: number;
@@ -32,7 +32,7 @@ export interface ServerExtendedChannelInfo {
 export interface ServerStandardChannelInfo {
   channel_id: number;
   user_identity: string;
-  nominal_hashrate: number;
+  nominal_hashrate: number | null;
   target_hex: string;
   extranonce_prefix_hex: string;
   shares_accepted: number;
@@ -89,10 +89,10 @@ export interface ExtendedChannelInfo {
   extranonce_prefix_hex: string;
   full_extranonce_size: number;
   rollable_extranonce_size: number;
-  shares_per_minute: number;
+  expected_shares_per_minute: number;
   shares_accepted: number;
   share_work_sum: number;
-  shares_submitted: number;
+  last_share_sequence_number: number;
   best_diff: number;
   last_batch_accepted: number;
   last_batch_work_sum: number;
@@ -109,10 +109,10 @@ export interface StandardChannelInfo {
   target_hex: string;
   requested_max_target_hex: string;
   extranonce_prefix_hex: string;
-  shares_per_minute: number;
+  expected_shares_per_minute: number;
   shares_accepted: number;
   share_work_sum: number;
-  shares_submitted: number;
+  last_share_sequence_number: number;
   best_diff: number;
   last_batch_accepted: number;
   last_batch_work_sum: number;
@@ -217,10 +217,15 @@ export interface Sv1ClientsResponse {
 
 /**
  * Global statistics from /api/v1/global
+ * 
+ * Note: Fields are optional (null) when that monitoring component is not enabled.
+ * - JDC: `server` and `sv2_clients` present, `sv1_clients` null
+ * - Translator: `server` and `sv1_clients` present, `sv2_clients` may be null
  */
 export interface GlobalInfo {
-  server: ServerSummary;
-  clients: ClientsSummary;
+  server: ServerSummary | null;
+  sv2_clients: ClientsSummary | null;
+  sv1_clients: Sv1ClientsSummary | null;
   uptime_secs: number;
 }
 

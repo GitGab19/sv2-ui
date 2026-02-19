@@ -68,14 +68,14 @@ export function UnifiedDashboard() {
   }, [allClients]);
 
   // Total hashrate:
-  // - JD mode: from SV2 client channels (poolGlobal.clients.total_hashrate)
-  // - Translator-only mode: from SV1 clients
+  // - JD mode: from SV2 client channels (poolGlobal.sv2_clients.total_hashrate)
+  // - Translator-only mode: from SV1 clients (poolGlobal.sv1_clients.total_hashrate or calculated)
   const totalHashrate = isJdMode 
-    ? (poolGlobal?.clients.total_hashrate || 0)
-    : sv1TotalHashrate;
+    ? (poolGlobal?.sv2_clients?.total_hashrate || 0)
+    : (poolGlobal?.sv1_clients?.total_hashrate || sv1TotalHashrate);
 
   const totalClientChannels = isJdMode 
-    ? (poolGlobal?.clients.total_channels || 0)
+    ? (poolGlobal?.sv2_clients?.total_channels || 0)
     : activeCount;
 
   const uptime = poolGlobal?.uptime_secs || 0;

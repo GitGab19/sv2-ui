@@ -149,7 +149,7 @@ export function PoolStats() {
             <div className="grid gap-4 md:grid-cols-3">
               <StatCard
                 title="Upstream Hashrate"
-                value={formatHashrate(poolGlobal?.server.total_hashrate || 0)}
+                value={formatHashrate(poolGlobal?.server?.total_hashrate || 0)}
                 icon={<Activity className="h-4 w-4 text-green-500" />}
                 subtitle="Reported to pool"
               />
