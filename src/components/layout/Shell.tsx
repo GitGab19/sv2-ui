@@ -146,14 +146,34 @@ export function Shell({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-background relative">
-        {/* Mobile Menu Trigger */}
-        <div className="md:hidden absolute top-4 left-4 z-40">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+        {/* Mobile Top Bar */}
+        <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0">
           <button
-            className="p-2 bg-background/50 backdrop-blur-sm border border-border/50 rounded-lg shadow-sm hover:bg-muted/50 transition-colors"
+            className="p-2 hover:bg-muted/50 rounded-lg transition-colors"
             onClick={() => setIsMobileOpen(true)}
           >
             <Menu className="h-5 w-5" />
+          </button>
+          <button
+            onClick={toggle}
+            aria-label="Toggle theme"
+            className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          >
+            <Sun className="absolute h-[18px] w-[18px] transition-all duration-300 rotate-0 scale-100 dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[18px] w-[18px] transition-all duration-300 rotate-90 scale-0 dark:rotate-0 dark:scale-100" />
+          </button>
+        </div>
+
+        {/* Desktop Theme Toggle */}
+        <div className="hidden md:block absolute top-4 right-4 z-40">
+          <button
+            onClick={toggle}
+            aria-label="Toggle theme"
+            className="relative w-10 h-10 flex items-center justify-center rounded-full bg-background/50 backdrop-blur-sm border border-border/50 shadow-sm hover:bg-accent transition-colors"
+          >
+            <Sun className="absolute h-[18px] w-[18px] transition-all duration-300 rotate-0 scale-100 dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[18px] w-[18px] transition-all duration-300 rotate-90 scale-0 dark:rotate-0 dark:scale-100" />
           </button>
         </div>
 
