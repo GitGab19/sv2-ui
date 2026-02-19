@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Activity, AlertTriangle, Server, Search, RefreshCw, ArrowUpRight } from 'lucide-react';
+import { AlertTriangle, Search, RefreshCw } from 'lucide-react';
 import { Shell } from '@/components/layout/Shell';
 import { StatCard } from '@/components/data/StatCard';
 import { HashrateChart } from '@/components/data/HashrateChart';
@@ -219,9 +219,7 @@ export function UnifiedDashboard() {
         <StatCard
           title="Total Hashrate"
           value={formatHashrate(totalHashrate)}
-          icon={<Activity className="h-4 w-4 text-green-500" />}
           subtitle={`${totalClientChannels} client channel(s)`}
-          trend={totalHashrate > 0 ? { value: 2.5, isPositive: true } : undefined}
         />
 
         <StatCard
@@ -231,7 +229,6 @@ export function UnifiedDashboard() {
               {activeCount} <span className="text-muted-foreground text-lg">/ {totalClients}</span>
             </span>
           }
-          icon={<Server className="h-4 w-4 text-primary" />}
           subtitle={`${totalClients - activeCount} offline workers`}
         />
 
@@ -243,14 +240,12 @@ export function UnifiedDashboard() {
               <span className="text-muted-foreground text-lg"> / {shareStats.submitted.toLocaleString()}</span>
             </span>
           }
-          icon={<ArrowUpRight className="h-4 w-4 text-green-500" />}
           subtitle={`${acceptanceRate}% accepted via ${poolChannelCount} channel(s)`}
         />
 
         <StatCard
           title="Best Difficulty"
           value={bestDiff > 0 ? formatDifficulty(bestDiff) : '-'}
-          icon={<Activity className="h-4 w-4 text-primary" />}
           subtitle={`from ${clientChannelCount} client channel(s)`}
         />
       </div>

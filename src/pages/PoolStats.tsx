@@ -5,15 +5,7 @@ import { StatCard } from '@/components/data/StatCard';
 import { UpstreamChannelTable } from '@/components/data/UpstreamChannelTable';
 import { usePoolData } from '@/hooks/usePoolData';
 import { formatHashrate, formatDifficulty, formatUptime } from '@/lib/utils';
-import { 
-  AlertTriangle,
-  CheckCircle2,
-  Activity,
-  Network,
-  Clock,
-  Server,
-  ArrowUpRight,
-} from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useUiConfig } from '@/hooks/useUiConfig';
 
 /**
@@ -115,21 +107,18 @@ export function PoolStats() {
                     <span className="text-muted-foreground text-lg"> / {stats.sharesSubmitted.toLocaleString()}</span>
                   </span>
                 }
-                icon={<CheckCircle2 className="h-4 w-4 text-green-500" />}
                 subtitle={`${acceptanceRate}% acceptance rate`}
               />
 
               <StatCard
                 title="Best Difficulty"
                 value={formatDifficulty(stats.bestDiff)}
-                icon={<ArrowUpRight className="h-4 w-4 text-primary" />}
                 subtitle="Highest share difficulty"
               />
 
               <StatCard
                 title="Share Work Sum"
                 value={stats.shareWorkSum.toLocaleString()}
-                icon={<Activity className="h-4 w-4 text-green-500" />}
                 subtitle="Cumulative work submitted"
               />
 
@@ -142,7 +131,6 @@ export function PoolStats() {
                     {stats.standardCount} <span className="text-muted-foreground text-lg">std</span>
                   </span>
                 }
-                icon={<Network className="h-4 w-4 text-purple-500" />}
                 subtitle={isJdMode ? 'JD Mode Active' : 'Direct to Pool'}
               />
             </div>
@@ -151,22 +139,19 @@ export function PoolStats() {
             <div className="grid gap-4 md:grid-cols-3">
               <StatCard
                 title="Upstream Hashrate"
-                value={formatHashrate(poolGlobal?.server?.total_hashrate || 0)}
-                icon={<Activity className="h-4 w-4 text-green-500" />}
+                value={formatHashrate(poolGlobal?.server.total_hashrate || 0)}
                 subtitle="Reported to pool"
               />
 
               <StatCard
                 title="Uptime"
                 value={formatUptime(poolGlobal?.uptime_secs || 0)}
-                icon={<Clock className="h-4 w-4 text-blue-500" />}
                 subtitle="Connection duration"
               />
 
               <StatCard
                 title="Data Source"
                 value={modeLabel}
-                icon={<Server className="h-4 w-4 text-primary" />}
                 subtitle={isJdMode ? 'Job Declaration Protocol' : 'Standard Stratum V2'}
               />
             </div>
