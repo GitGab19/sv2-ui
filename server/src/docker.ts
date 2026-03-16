@@ -361,6 +361,8 @@ export async function startStack(
   // Ensure network and config volume exist
   await ensureNetwork();
   await ensureConfigVolume();
+  // Connect sv2-ui to the network so it can proxy API requests
+  await connectSv2UiToNetwork();
 
   // Pull latest images from Docker Hub
   await pullImage(TRANSLATOR_IMAGE);
