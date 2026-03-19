@@ -1,86 +1,112 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-export type MinerPhase = 'idle' | 'arming' | 'hashing' | 'transitioning';
-
-interface Miner3DProps {
-  phase: MinerPhase;
-}
+export type MinerPhase = 'idle' | 'arming';
+interface Miner3DProps { phase: MinerPhase; }
 
 // ─── Geometry ─────────────────────────────────────────────────────────────────
 //
-//  S9 proportions: wide and flat  (~2:1 width-to-height)
-//    W=250  H=135  D=120
-//    Two fans at (W/4, H/2) and (3W/4, H/2)  r=50
+//  Real Antminer S9: 350 × 135 × 158 mm (L × W × H).  Scale = 0.8×.
 //
-//  Cable plate: a borderless 3D element in the same Z-plane as the front face,
-//  butted against its left edge. Contains two concentric coaxial arc loops.
-//    CW=80  — cable plate width
-//    marginLeft = −(W/2 + CW) = −205  →  right edge aligns with front-face left edge
+//  CSS 3D face mapping:
+//    front / back  →  W × H  = long aluminium vent faces  (280 × 126)
+//    left  / right →  D × H  = narrow FAN END faces       (108 × 126)
+//    top           →  W × D  = top plate + PSU box        (280 × 108)
+//    bottom        →  W × D  = bottom plate               (280 × 108)
 //
-//  Arc geometry (viewBox "0 0 CW H", arcs start at x=CW):
-//    Both arcs share center ≈ (55, 67.5).
-//    Inner: r=35  from (80,43) → (80,92)   leftmost x=20
-//    Outer: r=52  from (80,22) → (80,113)  leftmost x=3
-//    All within 0–80 viewport — no overflow needed.
+//  PSU box: ~40% of chassis width, sits on top offset toward back.
+//    PSU_W=110  PSU_H=36  PSU_D=52
+//    Z_PSU = -(D/2 - PSU_D/2) = -(54 - 26) = -28  (back-aligned)
 //
 // ──────────────────────────────────────────────────────────────────────────────
 
-const W  = 250;
-const H  = 135;
-const D  = 120;
-const R  = 50;   // fan radius
-const CW = 80;   // cable plate width
+const W = 280;
+const H = 126;
+const D = 108;
+const R = 50;
 
-const DEF_ROT = { x: -10, y: 18 };
+const PSU_W = 110;
+const PSU_H = 36;
+const PSU_D = 52;
+const Z_PSU = -(D / 2 - PSU_D / 2);   // −28 px
 
-// Six-blade impeller path centred at (0,0)
+const DEF_ROT = { x: -8, y: 90 };
+
+// ─── Fan physics constants ─────────────────────────────────────────────────────
+const IDLE_VEL     = 360 / 3000;  // 0.12 deg/ms → 3.0 s/rev at idle
+const ACTIVE_VEL   = 360 / 60;   // 6.00 deg/ms → full speed when arming
+const CLICK_IMPULSE = 1.5;        // deg/ms added per hub click
+const MAX_VEL      = 4.5;         // deg/ms cap  → ~80 ms/rev max boost
+const HALF_LIFE    = 350;         // ms — friction half-life back to idle
+
+// ─── Fan blade path ────────────────────────────────────────────────────────────
+
 function bladePath(r: number): string {
-  const ir = r * 0.18, or = r * 0.88, sw = r * 0.28;
+  const ri  = r * 0.38;
+  const ro  = r * 0.91;
+  const rl  = r * 0.06;
+  const tl  = r * 0.05;
+  const tt  = r * 0.31;
+  const c1y = ri + (ro - ri) * 0.54;
+  const c2y = ri + (ro - ri) * 0.80;
   return (
-    `M 0 -${ir} ` +
-    `C  ${sw} -${r * 0.42},  ${sw * 1.6} -${or * 0.88},  ${sw * 0.45} -${or} ` +
-    `C -${sw * 0.45} -${or}, -${sw} -${r * 0.42}, 0 -${ir} Z`
+    `M ${rl},${-ri} ` +
+    `C ${rl},${-c1y}  ${-tl},${-c2y}  ${-tl},${-ro} ` +
+    `L ${-tt},${-ro} ` +
+    `C ${-tt},${-(c2y - r * 0.08)}  ${-rl},${-c1y + r * 0.05}  ${-rl},${-ri} Z`
   );
 }
-
 const BLADE  = bladePath(R);
-const ANGLES = [0, 60, 120, 180, 240, 300] as const;
+const ANGLES = [0, 40, 80, 120, 160, 200, 240, 280, 320] as const;
 
 // ─── Fan ──────────────────────────────────────────────────────────────────────
-// Defined outside Miner3D — keeps component type stable across renders.
+// spinRef → driven by RAF loop in parent (no CSS animation)
+// hubRef  → pulsed directly via DOM on click
 
-function Fan({ cx, cy, dur, active }: {
-  cx: number; cy: number; dur: string; active: boolean;
+function Fan({ cx, cy, active, spinRef, hubRef }: {
+  cx: number; cy: number; active: boolean;
+  spinRef: React.RefObject<SVGGElement>;
+  hubRef:  React.RefObject<SVGCircleElement>;
 }) {
+  const C      = 'hsl(var(--primary))';
+  const fillOp = active ? '0.32' : '0.10';
   return (
     <>
-      {/* Bezel */}
-      <circle cx={cx} cy={cy} r={R}        strokeWidth={0.95} />
-      {/* Guard ring */}
-      <circle cx={cx} cy={cy} r={R * 0.80} strokeWidth={0.45} strokeOpacity={0.38} />
-      {/* Spinning impeller */}
+      <circle cx={cx} cy={cy} r={R}        strokeWidth={1.0} />
+      <circle cx={cx} cy={cy} r={R * 0.95} strokeWidth={0.4} strokeOpacity={0.32} />
       <g transform={`translate(${cx},${cy})`}>
-        <g style={{
-          animation:       `sv2-fan-spin ${dur} linear infinite`,
-          transformBox:    'fill-box',
-          transformOrigin: 'center',
-        }}>
+        {/* RAF sets style.transform on this element directly — no CSS animation */}
+        <g ref={spinRef} style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
           {ANGLES.map(a => (
-            <path
-              key={a}
-              transform={`rotate(${a})`}
-              d={BLADE}
-              fill={`hsl(var(--primary) / ${active ? '0.22' : '0.09'})`}
-              strokeWidth={0.45}
-            />
+            <path key={a} transform={`rotate(${a})`} d={BLADE}
+              fill={`hsl(var(--primary) / ${fillOp})`} stroke={C} strokeWidth={0.4} />
           ))}
         </g>
       </g>
-      {/* Hub */}
-      <circle cx={cx} cy={cy} r={R * 0.12}  strokeWidth={0.7} />
-      <circle cx={cx} cy={cy} r={R * 0.055} fill="hsl(var(--primary) / 0.9)" stroke="none" />
+      {/* hubRef: outer hub ring — pulsed on click via DOM */}
+      <circle ref={hubRef} cx={cx} cy={cy} r={R * 0.36} strokeWidth={0.9}
+        fill={`hsl(var(--primary) / 0.22)`} stroke={C} />
+      <circle cx={cx} cy={cy} r={R * 0.26} strokeWidth={0.6}
+        fill={`hsl(var(--primary) / 0.14)`} stroke={C} />
+      <circle cx={cx} cy={cy} r={R * 0.10} strokeWidth={0.7}
+        fill={`hsl(var(--primary) / 0.45)`} stroke={C} />
+      <circle cx={cx} cy={cy} r={R * 0.04}
+        fill={`hsl(var(--primary) / 0.90)`} stroke="none" />
     </>
+  );
+}
+
+// ─── VentGrid ─────────────────────────────────────────────────────────────────
+
+function VentGrid({ w, h, sp }: { w: number; h: number; sp: React.SVGProps<SVGSVGElement> }) {
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} {...sp}>
+      {Array.from({ length: 12 }, (_, i) => {
+        const y = ((i + 1) * h) / 13;
+        return <line key={i} x1={10} y1={y} x2={w - 10} y2={y}
+          strokeWidth={0.65} strokeOpacity={0.50} />;
+      })}
+    </svg>
   );
 }
 
@@ -89,21 +115,63 @@ function Fan({ cx, cy, dur, active }: {
 export function Miner3D({ phase }: Miner3DProps) {
   const [rot, setRot]       = useState(DEF_ROT);
   const [dragging, setDrag] = useState(false);
+
   const drag = useRef<{ px: number; py: number; rx: number; ry: number } | null>(null);
 
-  const isArming  = phase === 'arming';
-  const isHashing = phase === 'hashing' || phase === 'transitioning';
-  const isActive  = isArming || isHashing;
+  // ── Fan physics (all refs — zero React re-renders during spin) ───────────────
+  const angleRef    = useRef(0);
+  const velRef      = useRef(IDLE_VEL);
+  const targetRef   = useRef(IDLE_VEL);
+  const lastTimeRef = useRef<number | null>(null);
+  const rafRef      = useRef<number | null>(null);
 
-  // Fan speed: idle is calm, arming is noticeably fast, hashing is a blur
-  const fanDur = isHashing ? '0.04s' : isArming ? '0.4s' : '3.2s';
+  // Left and right fan faces each get their own spin + hub refs
+  const spinRefL = useRef<SVGGElement>(null);
+  const spinRefR = useRef<SVGGElement>(null);
+  const hubRefL  = useRef<SVGCircleElement>(null);
+  const hubRefR  = useRef<SVGCircleElement>(null);
 
-  // Glow builds dramatically as phase escalates
-  const glow = isHashing
-    ? '0 0 24px hsl(var(--primary) / 0.82), 0 0 52px hsl(var(--primary) / 0.28)'
-    : isArming
-      ? '0 0 13px hsl(var(--primary) / 0.54)'
-      : '0 0 3px hsl(var(--primary) / 0.12)';
+  const isActive = phase === 'arming';
+
+  // Sync target velocity when arming state changes
+  useEffect(() => {
+    if (isActive) {
+      velRef.current    = ACTIVE_VEL;  // snap immediately to full speed
+      targetRef.current = ACTIVE_VEL;
+    } else {
+      targetRef.current = IDLE_VEL;   // friction coasts back to idle
+    }
+  }, [isActive]);
+
+  // RAF loop — started once, reads only refs (never stale, zero re-renders)
+  useEffect(() => {
+    const frame = (now: number) => {
+      const dt = lastTimeRef.current !== null
+        ? Math.min(now - lastTimeRef.current, 100)  // cap: handles tab wake-up
+        : 0;
+      lastTimeRef.current = now;
+
+      // Exponential friction toward target velocity
+      const decay = Math.pow(0.5, dt / HALF_LIFE);
+      velRef.current = targetRef.current + (velRef.current - targetRef.current) * decay;
+
+      // Advance angle continuously — no modulo reset means no position jump
+      angleRef.current = (angleRef.current + velRef.current * dt) % 360;
+      const t = `rotate(${angleRef.current.toFixed(2)}deg)`;
+
+      // Motion blur scales with velocity: hides stroboscopic aliasing at high speed
+      // (9 blades × 40° spacing → aliasing threshold ≈ 1.2 deg/ms at 60 fps)
+      const blurPx = Math.max(0, (velRef.current - 0.40) * 2).toFixed(1);
+      const f = blurPx !== '0.0' ? `blur(${blurPx}px)` : '';
+
+      if (spinRefL.current) { spinRefL.current.style.transform = t; spinRefL.current.style.filter = f; }
+      if (spinRefR.current) { spinRefR.current.style.transform = t; spinRefR.current.style.filter = f; }
+
+      rafRef.current = requestAnimationFrame(frame);
+    };
+    rafRef.current = requestAnimationFrame(frame);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, []);
 
   // ── Drag-to-rotate ──────────────────────────────────────────────────────────
   const onPD = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -114,17 +182,42 @@ export function Miner3D({ phase }: Miner3DProps) {
   const onPM = (e: React.PointerEvent) => {
     if (!drag.current) return;
     setRot({
-      x: Math.max(-35, Math.min(20, drag.current.rx - (e.clientY - drag.current.py) * 0.3)),
+      x: Math.max(-60, Math.min(10, drag.current.rx - (e.clientY - drag.current.py) * 0.35)),
       y: drag.current.ry + (e.clientX - drag.current.px) * 0.4,
     });
   };
   const onPU = () => { drag.current = null; setDrag(false); };
 
+  // ── Hub click — pure ref mutation, no setState ───────────────────────────────
+  const handleFanClick = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (isActive) return;
+
+    // Each click stacks velocity; friction will decay it back to idle
+    velRef.current = Math.min(velRef.current + CLICK_IMPULSE, MAX_VEL);
+
+    // Hub ring pulse — direct DOM manipulation, no React state involved
+    [hubRefL.current, hubRefR.current].forEach(hub => {
+      if (!hub) return;
+      hub.style.transition = 'none';
+      hub.style.fill = 'hsl(var(--primary) / 0.80)';
+      requestAnimationFrame(() => {
+        if (!hub) return;
+        hub.style.transition = 'fill 0.4s ease';
+        hub.style.fill = '';
+      });
+    });
+  };
+
   // ── Style helpers ───────────────────────────────────────────────────────────
   const C   = 'hsl(var(--primary))';
-  const bOp = isActive ? '0.90' : '0.72';
+  const bOp = isActive ? '0.88' : '0.55';
 
-  const face = (w: number, h: number, ml: number, mt: number, t: string): CSSProperties => ({
+  const glow = isActive
+    ? '0 0 20px hsl(var(--primary) / 0.80), 0 0 48px hsl(var(--primary) / 0.25)'
+    : '0 0 4px hsl(var(--primary) / 0.15)';
+
+  const face = (w: number, h: number, ml: number, mt: number, t: string, r = 6): CSSProperties => ({
     position:           'absolute',
     top:                '50%',
     left:               '50%',
@@ -134,20 +227,42 @@ export function Miner3D({ phase }: Miner3DProps) {
     marginTop:          mt,
     boxSizing:          'border-box',
     border:             `1px solid hsl(var(--primary) / ${bOp})`,
-    background:         'hsl(var(--primary) / 0.015)',
+    borderRadius:       r,
+    background:         'hsl(var(--primary) / 0.018)',
     backfaceVisibility: 'hidden',
     boxShadow:          glow,
     transition:         'box-shadow 0.4s ease',
     transform:          t,
   });
 
-  const svgCommon = {
-    fill:           'none'                    as const,
+  const sp: React.SVGProps<SVGSVGElement> = {
+    fill:           'none',
     stroke:         C,
-    shapeRendering: 'geometricPrecision'      as const,
-    style:          { display: 'block' }      as CSSProperties,
-    'aria-hidden':  true                      as const,
+    shapeRendering: 'geometricPrecision',
+    style:          { display: 'block' },
+    'aria-hidden':  true,
   };
+
+  const FC = D / 2;
+  const FY = H / 2;
+
+  const psuFace = (w: number, h: number, ml: number, mt: number, t: string, r = 3): CSSProperties => ({
+    position:           'absolute',
+    top:                '50%',
+    left:               '50%',
+    width:              w,
+    height:             h,
+    marginLeft:         ml,
+    marginTop:          mt,
+    boxSizing:          'border-box',
+    border:             `1px solid hsl(var(--primary) / ${bOp})`,
+    borderRadius:       r,
+    background:         'hsl(var(--primary) / 0.025)',
+    backfaceVisibility: 'hidden',
+    boxShadow:          glow,
+    transition:         'box-shadow 0.4s ease',
+    transform:          t,
+  });
 
   return (
     <div
@@ -156,7 +271,7 @@ export function Miner3D({ phase }: Miner3DProps) {
         alignItems:     'center',
         justifyContent: 'center',
         width:          '100%',
-        maxWidth:       640,
+        maxWidth:       440,
         height:         280,
         flexShrink:     0,
         cursor:         dragging ? 'grabbing' : 'grab',
@@ -169,7 +284,7 @@ export function Miner3D({ phase }: Miner3DProps) {
       onPointerCancel={onPU}
       onDoubleClick={() => setRot(DEF_ROT)}
     >
-      <div style={{ perspective: '900px' }}>
+      <div style={{ perspective: '1100px' }}>
         <div style={{
           width:          W,
           height:         H,
@@ -177,97 +292,127 @@ export function Miner3D({ phase }: Miner3DProps) {
           transformStyle: 'preserve-3d',
           transform:      `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`,
           transition:     dragging ? 'none' : 'transform 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
+        } as CSSProperties}>
 
-          {/* ══════════════════════════════════════════════════════════════════
-              CABLE PLATE
-              Sits in the same Z-plane as the front face, left of it.
-              Right edge (x=CW) aligns with the front face's left edge.
-              Two concentric coaxial loops, both centred at ≈(55, H/2).
-          ══════════════════════════════════════════════════════════════════ */}
-          <div style={{
-            position:           'absolute',
-            top:                '50%',
-            left:               '50%',
-            width:              CW,
-            height:             H,
-            marginLeft:         -(W / 2 + CW),
-            marginTop:          -H / 2,
-            background:         'transparent',
-            border:             'none',
-            backfaceVisibility: 'hidden',
-            pointerEvents:      'none',
-            transform:          `translateZ(${D / 2}px)`,
-          }}>
-            <svg viewBox={`0 0 ${CW} ${H}`} width={CW} height={H} {...svgCommon}>
-              <g style={{
-                opacity:    isHashing ? 0.88 : isArming ? 0.66 : 0.44,
-                transition: 'opacity 0.4s ease',
-              }}>
-                {/* Inner loop  r=35  centre≈(55, 67.5)  leftmost x=20 */}
-                <path d={`M ${CW} 43 A 35 35 0 1 0 ${CW} 92`}  strokeWidth={1.0} />
-                {/* Outer loop  r=52  centre≈(55, 67.5)  leftmost x=3  */}
-                <path d={`M ${CW} 22 A 52 52 0 1 0 ${CW} 113`} strokeWidth={1.0} />
-                {/* Connector studs where loops meet the chassis */}
-                <circle cx={CW} cy={43}  r={3.2} fill={C} stroke="none" />
-                <circle cx={CW} cy={92}  r={3.2} fill={C} stroke="none" />
-                <circle cx={CW} cy={22}  r={2.2} fill={C} stroke="none" />
-                <circle cx={CW} cy={113} r={2.2} fill={C} stroke="none" />
-              </g>
-            </svg>
-          </div>
+          {/* ════════════════════ CHASSIS FACES ════════════════════════════ */}
 
-          {/* ══════════════════════════════════════════════════════════════════
-              MAIN CHASSIS
-          ══════════════════════════════════════════════════════════════════ */}
-
-          {/* Front — two fans */}
+          {/* Front  (W×H)  — long vent face */}
           <div style={face(W, H, -W / 2, -H / 2, `translateZ(${D / 2}px)`)}>
-            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} {...svgCommon}>
-              <Fan cx={W / 4}     cy={H / 2} dur={fanDur} active={isActive} />
-              <Fan cx={3 * W / 4} cy={H / 2} dur={fanDur} active={isActive} />
-              {/* Divider between fan bays */}
-              <line x1={W / 2} y1={6} x2={W / 2} y2={H - 6}
-                strokeWidth={0.35} strokeOpacity={0.18} />
-              {/* Status strip */}
-              <line x1={6} y1={H - 13} x2={W - 6} y2={H - 13}
-                strokeWidth={0.35} strokeOpacity={0.18} />
-              {/* LED indicator */}
-              <circle cx={W - 11} cy={H - 6.5} r={2.8}
-                strokeWidth={0.65} strokeOpacity={0.65} />
-              {isActive && (
-                <circle cx={W - 11} cy={H - 6.5} r={1.8} fill={C} stroke="none" />
-              )}
-            </svg>
+            <VentGrid w={W} h={H} sp={sp} />
           </div>
 
-          {/* Back */}
-          <div style={face(W, H, -W / 2, -H / 2,
-            `rotateY(180deg) translateZ(${D / 2}px)`)} />
+          {/* Back  (W×H)  — long vent face */}
+          <div style={face(W, H, -W / 2, -H / 2, `rotateY(180deg) translateZ(${D / 2}px)`)}>
+            <VentGrid w={W} h={H} sp={sp} />
+          </div>
 
-          {/* Right — exhaust vent lines */}
-          <div style={face(D, H, -D / 2, -H / 2,
-            `rotateY(90deg) translateZ(${W / 2}px)`)}>
-            <svg viewBox={`0 0 ${D} ${H}`} width={D} height={H} {...svgCommon}>
-              {[0.25, 0.50, 0.75].map(t => (
-                <line key={t}
-                  x1={8} y1={H * t} x2={D - 8} y2={H * t}
-                  strokeWidth={0.55} strokeOpacity={0.42} />
+          {/* Left  (D×H)  — FAN END */}
+          <div style={face(D, H, -D / 2, -H / 2, `rotateY(-90deg) translateZ(${W / 2}px)`)}>
+            <svg viewBox={`0 0 ${D} ${H}`} width={D} height={H} {...sp}>
+              <Fan cx={FC} cy={FY} active={isActive} spinRef={spinRefL} hubRef={hubRefL} />
+              {([[ 8, 8 ], [ D-8, 8 ], [ 8, H-8 ], [ D-8, H-8 ]] as const).map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={2.8}
+                  strokeWidth={0.55} strokeOpacity={0.45}
+                  fill={`hsl(var(--primary) / 0.06)`} />
               ))}
+              {/* Hit target = hub only (r stops at blade inner radius) */}
+              <circle cx={FC} cy={FY} r={R * 0.38}
+                fill="transparent" stroke="none"
+                style={{ cursor: 'pointer' }}
+                onPointerDown={handleFanClick} />
             </svg>
           </div>
 
-          {/* Left */}
-          <div style={face(D, H, -D / 2, -H / 2,
-            `rotateY(-90deg) translateZ(${W / 2}px)`)} />
+          {/* Right  (D×H)  — FAN END — faces viewer at DEF_ROT y=90 */}
+          <div style={face(D, H, -D / 2, -H / 2, `rotateY(90deg) translateZ(${W / 2}px)`)}>
+            <svg viewBox={`0 0 ${D} ${H}`} width={D} height={H} {...sp}>
+              <Fan cx={FC} cy={FY} active={isActive} spinRef={spinRefR} hubRef={hubRefR} />
+              {([[ 8, 8 ], [ D-8, 8 ], [ 8, H-8 ], [ D-8, H-8 ]] as const).map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={2.8}
+                  strokeWidth={0.55} strokeOpacity={0.45}
+                  fill={`hsl(var(--primary) / 0.06)`} />
+              ))}
+              {/* Hit target = hub only */}
+              <circle cx={FC} cy={FY} r={R * 0.38}
+                fill="transparent" stroke="none"
+                style={{ cursor: 'pointer' }}
+                onPointerDown={handleFanClick} />
+            </svg>
+          </div>
 
-          {/* Top */}
-          <div style={face(W, D, -W / 2, -D / 2,
-            `rotateX(-90deg) translateZ(${H / 2}px)`)} />
+          {/* Top  (W×D) */}
+          <div style={face(W, D, -W / 2, -D / 2, `rotateX(-90deg) translateZ(${H / 2}px)`)} />
 
-          {/* Bottom */}
-          <div style={face(W, D, -W / 2, -D / 2,
-            `rotateX(90deg) translateZ(${H / 2}px)`)} />
+          {/* Bottom  (W×D) */}
+          <div style={face(W, D, -W / 2, -D / 2, `rotateX(90deg) translateZ(${H / 2}px)`)} />
+
+          {/* ════════════════════ PSU BOX ══════════════════════════════════ */}
+          <div style={{
+            position:       'absolute',
+            top:            '50%',
+            left:           '50%',
+            width:          PSU_W,
+            height:         PSU_H,
+            marginLeft:     -PSU_W / 2,
+            marginTop:      -(H / 2 + PSU_H),
+            transformStyle: 'preserve-3d',
+            transform:      `translateZ(${Z_PSU}px)`,
+          }}>
+
+            {/* PSU front face  (110 × 36) */}
+            <div style={psuFace(PSU_W, PSU_H, -PSU_W / 2, -PSU_H / 2, `translateZ(${PSU_D / 2}px)`)}>
+              <svg viewBox={`0 0 ${PSU_W} ${PSU_H}`} width={PSU_W} height={PSU_H} {...sp}>
+                <rect x={6} y={6} width={52} height={24}
+                  fill={`hsl(var(--primary) / 0.06)`} stroke={C}
+                  strokeWidth={0.5} strokeOpacity={0.5} rx={1.5} />
+                <line x1={10} y1={14} x2={54} y2={14} strokeWidth={0.35} strokeOpacity={0.4} />
+                <line x1={10} y1={20} x2={54} y2={20} strokeWidth={0.3}  strokeOpacity={0.3} />
+                <rect x={68} y={8} width={18} height={10}
+                  fill={`hsl(var(--primary) / 0.08)`} stroke={C}
+                  strokeWidth={0.45} strokeOpacity={0.6} rx={1} />
+                <circle cx={95} cy={13} r={2.8} stroke={C} strokeWidth={0.6}
+                  fill={isActive ? C : `hsl(var(--primary) / 0.08)`}
+                  style={{ transition: 'fill 0.3s' }} />
+              </svg>
+            </div>
+
+            {/* PSU back face */}
+            <div style={psuFace(PSU_W, PSU_H, -PSU_W / 2, -PSU_H / 2,
+              `rotateY(180deg) translateZ(${PSU_D / 2}px)`)} />
+
+            {/* PSU right face  (52 × 36) */}
+            <div style={psuFace(PSU_D, PSU_H, -PSU_D / 2, -PSU_H / 2,
+              `rotateY(90deg) translateZ(${PSU_W / 2}px)`)}>
+              <svg viewBox={`0 0 ${PSU_D} ${PSU_H}`} width={PSU_D} height={PSU_H} {...sp}>
+                {[9, 21].map(y => (
+                  <rect key={y} x={8} y={y} width={36} height={8}
+                    fill={`hsl(var(--primary) / 0.06)`} stroke={C}
+                    strokeWidth={0.4} strokeOpacity={0.5} rx={1} />
+                ))}
+              </svg>
+            </div>
+
+            {/* PSU left face  (52 × 36) */}
+            <div style={psuFace(PSU_D, PSU_H, -PSU_D / 2, -PSU_H / 2,
+              `rotateY(-90deg) translateZ(${PSU_W / 2}px)`)} />
+
+            {/* PSU top face  (110 × 52) */}
+            <div style={psuFace(PSU_W, PSU_D, -PSU_W / 2, -PSU_D / 2,
+              `rotateX(-90deg) translateZ(${PSU_H / 2}px)`)}>
+              <svg viewBox={`0 0 ${PSU_W} ${PSU_D}`} width={PSU_W} height={PSU_D} {...sp}>
+                {Array.from({ length: 4 }, (_, i) => {
+                  const y = ((i + 1) * PSU_D) / 5;
+                  return <line key={i} x1={8} y1={y} x2={PSU_W - 8} y2={y}
+                    strokeWidth={0.4} strokeOpacity={0.35} />;
+                })}
+              </svg>
+            </div>
+
+            {/* PSU bottom — hidden */}
+            <div style={{ ...psuFace(PSU_W, PSU_D, -PSU_W / 2, -PSU_D / 2,
+              `rotateX(90deg) translateZ(${PSU_H / 2}px)`), opacity: 0 }} />
+
+          </div>{/* end PSU wrapper */}
 
         </div>
       </div>

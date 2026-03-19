@@ -356,15 +356,45 @@
   border-radius: var(--radius);
 }
 
-@keyframes sv2-fan-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+
+@keyframes sv2-wire-flow {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
 }
 
 @keyframes sv2-fan-burst {
   0%   { transform: scale(0.84); opacity: 0.86; }
   72%  { transform: scale(1.08); opacity: 0.24; }
   100% { transform: scale(1.16); opacity: 0; }
+}
+
+/* Miner launch — compress → liftoff → accelerate away */
+@keyframes sv2-miner-launch {
+  0%   { transform: translateY(0)     scale(1);    opacity: 1; }
+  8%   { transform: translateY(12px)  scale(0.97); opacity: 1; }
+  20%  { transform: translateY(-24px) scale(1.01); opacity: 1; }
+  55%  { transform: translateY(-180px);            opacity: 1; }
+  100% { transform: translateY(-1000px) scale(0.3); opacity: 0; }
+}
+
+@keyframes sv2-speed-line {
+  0%   { opacity: 0; stroke-dashoffset: 1; }
+  25%  { opacity: 0.8; }
+  100% { opacity: 0.15; stroke-dashoffset: 0; }
+}
+
+/* Power surge: normal → intense primary → white-hot */
+@keyframes sv2-miner-surge {
+  0%   { filter: brightness(1)   saturate(1); }
+  50%  { filter: brightness(1.6) saturate(2); }
+  100% { filter: brightness(3.5) saturate(0.3); }
+}
+
+/* Warm radial glow that expands from the miner during surge */
+@keyframes sv2-surge-glow {
+  0%   { opacity: 0; transform: scale(0.4); }
+  35%  { opacity: 0.85; }
+  100% { opacity: 1;    transform: scale(1.4); }
 }
 
 /* Rocket launch — compress → liftoff → accelerate away */
