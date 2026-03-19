@@ -177,8 +177,7 @@ export function PoolConfigStep({ data, updateData, onNext }: StepProps) {
           );
         })}
 
-        {!isSoloMode && (
-          <button
+        <button
             type="button"
             onClick={handleEnableCustom}
             aria-pressed={isCustom}
@@ -200,7 +199,6 @@ export function PoolConfigStep({ data, updateData, onNext }: StepProps) {
               <div className="text-xs text-muted-foreground leading-relaxed">Configure your own pool connection</div>
             </div>
           </button>
-        )}
       </div>
 
       {isCustom && (
