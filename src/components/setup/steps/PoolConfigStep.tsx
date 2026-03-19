@@ -11,6 +11,7 @@ interface KnownPool {
   description: string;
   badge?: 'testing' | 'coming-soon';
   logoUrl?: string;
+  logoOnDark?: boolean; // true = white logo, needs dark container in light mode
 }
 
 const POOL_MINING_NO_JD: KnownPool[] = [
@@ -22,6 +23,7 @@ const POOL_MINING_NO_JD: KnownPool[] = [
     authority_public_key: '9awtMD5KQgvRUh2yFbjVeT7b6hjipWcAsQHd6wEhgtDT9soosna',
     description: 'Production SV2 pool by Braiins',
     logoUrl: '/braiins.svg',
+    logoOnDark: true,
   },
 ];
 
@@ -152,12 +154,12 @@ export function PoolConfigStep({ data, updateData, onNext }: StepProps) {
                 </div>
               )}
               <div className="flex items-start gap-4">
-                <div className={`p-2.5 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-primary/10' : 'bg-muted/50'}`} aria-hidden="true">
+                <div className={`p-2.5 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-primary/10' : pool.logoOnDark ? 'bg-zinc-800' : 'bg-muted/50'}`} aria-hidden="true">
                   {pool.logoUrl ? (
                     <img
                       src={pool.logoUrl}
                       alt=""
-                      className="w-10 h-10 object-contain brightness-[0.3] dark:brightness-100"
+                      className="w-10 h-10 object-contain"
                       onError={(e) => { e.currentTarget.style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden'); }}
                     />
                   ) : null}
