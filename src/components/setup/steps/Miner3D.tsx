@@ -63,13 +63,13 @@ const ANGLES = [0, 40, 80, 120, 160, 200, 240, 280, 320] as const;
 // spinRef → driven by RAF loop in parent (no CSS animation)
 // hubRef  → pulsed directly via DOM on click
 
-function Fan({ cx, cy, active, spinRef, hubRef }: {
-  cx: number; cy: number; active: boolean;
+function Fan({ cx, cy, active, off, spinRef, hubRef }: {
+  cx: number; cy: number; active: boolean; off: boolean;
   spinRef: React.RefObject<SVGGElement>;
   hubRef:  React.RefObject<SVGCircleElement>;
 }) {
   const C      = 'hsl(var(--primary))';
-  const fillOp = active ? '0.32' : '0.10';
+  const fillOp = active ? '0.32' : off ? '0.04' : '0.10';
   return (
     <>
       <circle cx={cx} cy={cy} r={R}        strokeWidth={1.0} />
@@ -115,6 +115,7 @@ function VentGrid({ w, h, sp }: { w: number; h: number; sp: React.SVGProps<SVGSV
 export function Miner3D({ phase }: Miner3DProps) {
   const [rot, setRot]       = useState(DEF_ROT);
   const [dragging, setDrag] = useState(false);
+  const [powered, setPowered] = useState(true);
 
   const drag = useRef<{ px: number; py: number; rx: number; ry: number } | null>(null);
 
@@ -131,17 +132,20 @@ export function Miner3D({ phase }: Miner3DProps) {
   const hubRefL  = useRef<SVGCircleElement>(null);
   const hubRefR  = useRef<SVGCircleElement>(null);
 
-  const isActive = phase === 'arming';
+  const isOff    = !powered;
+  const isActive = powered && phase === 'arming';
 
-  // Sync target velocity when arming state changes
+  // Sync target velocity when power or arming state changes
   useEffect(() => {
-    if (isActive) {
+    if (isOff) {
+      targetRef.current = 0;           // coast to full stop
+    } else if (isActive) {
       velRef.current    = ACTIVE_VEL;  // snap immediately to full speed
       targetRef.current = ACTIVE_VEL;
     } else {
       targetRef.current = IDLE_VEL;   // friction coasts back to idle
     }
-  }, [isActive]);
+  }, [isActive, isOff]);
 
   // RAF loop — started once, reads only refs (never stale, zero re-renders)
   useEffect(() => {
@@ -191,7 +195,7 @@ export function Miner3D({ phase }: Miner3DProps) {
   // ── Hub click — pure ref mutation, no setState ───────────────────────────────
   const handleFanClick = (e: React.PointerEvent) => {
     e.stopPropagation();
-    if (isActive) return;
+    if (isActive || isOff) return;
 
     // Each click stacks velocity; friction will decay it back to idle
     velRef.current = Math.min(velRef.current + CLICK_IMPULSE, MAX_VEL);
@@ -211,10 +215,11 @@ export function Miner3D({ phase }: Miner3DProps) {
 
   // ── Style helpers ───────────────────────────────────────────────────────────
   const C   = 'hsl(var(--primary))';
-  const bOp = isActive ? '0.88' : '0.55';
+  const bOp = isActive ? '0.88' : isOff ? '0.18' : '0.55';
 
   const glow = isActive
     ? '0 0 20px hsl(var(--primary) / 0.80), 0 0 48px hsl(var(--primary) / 0.25)'
+    : isOff ? 'none'
     : '0 0 4px hsl(var(--primary) / 0.15)';
 
   const face = (w: number, h: number, ml: number, mt: number, t: string, r = 6): CSSProperties => ({
@@ -309,7 +314,7 @@ export function Miner3D({ phase }: Miner3DProps) {
           {/* Left  (D×H)  — FAN END */}
           <div style={face(D, H, -D / 2, -H / 2, `rotateY(-90deg) translateZ(${W / 2}px)`)}>
             <svg viewBox={`0 0 ${D} ${H}`} width={D} height={H} {...sp}>
-              <Fan cx={FC} cy={FY} active={isActive} spinRef={spinRefL} hubRef={hubRefL} />
+              <Fan cx={FC} cy={FY} active={isActive} off={isOff} spinRef={spinRefL} hubRef={hubRefL} />
               {([[ 8, 8 ], [ D-8, 8 ], [ 8, H-8 ], [ D-8, H-8 ]] as const).map(([x, y], i) => (
                 <circle key={i} cx={x} cy={y} r={2.8}
                   strokeWidth={0.55} strokeOpacity={0.45}
@@ -326,7 +331,7 @@ export function Miner3D({ phase }: Miner3DProps) {
           {/* Right  (D×H)  — FAN END — faces viewer at DEF_ROT y=90 */}
           <div style={face(D, H, -D / 2, -H / 2, `rotateY(90deg) translateZ(${W / 2}px)`)}>
             <svg viewBox={`0 0 ${D} ${H}`} width={D} height={H} {...sp}>
-              <Fan cx={FC} cy={FY} active={isActive} spinRef={spinRefR} hubRef={hubRefR} />
+              <Fan cx={FC} cy={FY} active={isActive} off={isOff} spinRef={spinRefR} hubRef={hubRefR} />
               {([[ 8, 8 ], [ D-8, 8 ], [ 8, H-8 ], [ D-8, H-8 ]] as const).map(([x, y], i) => (
                 <circle key={i} cx={x} cy={y} r={2.8}
                   strokeWidth={0.55} strokeOpacity={0.45}
@@ -370,9 +375,24 @@ export function Miner3D({ phase }: Miner3DProps) {
                 <rect x={68} y={8} width={18} height={10}
                   fill={`hsl(var(--primary) / 0.08)`} stroke={C}
                   strokeWidth={0.45} strokeOpacity={0.6} rx={1} />
-                <circle cx={95} cy={13} r={2.8} stroke={C} strokeWidth={0.6}
-                  fill={isActive ? C : `hsl(var(--primary) / 0.08)`}
-                  style={{ transition: 'fill 0.3s' }} />
+                {/* Power button — clickable ring + center dot */}
+                <circle
+                  cx={95} cy={13} r={6}
+                  stroke={C} strokeWidth={1.2}
+                  strokeOpacity={powered ? 0.80 : 0.28}
+                  fill={powered ? `hsl(var(--primary) / 0.28)` : 'transparent'}
+                  style={{
+                    cursor: 'pointer',
+                    filter: powered ? `drop-shadow(0 0 4px hsl(var(--primary) / 0.55))` : 'none',
+                    transition: 'fill 0.35s ease, filter 0.35s ease, stroke-opacity 0.35s ease',
+                  }}
+                  onPointerDown={e => { e.stopPropagation(); setPowered(p => !p); }}
+                />
+                <circle cx={95} cy={13} r={1.8}
+                  fill={powered ? C : `hsl(var(--primary) / 0.25)`}
+                  stroke="none"
+                  style={{ pointerEvents: 'none', transition: 'fill 0.35s ease' }}
+                />
               </svg>
             </div>
 
