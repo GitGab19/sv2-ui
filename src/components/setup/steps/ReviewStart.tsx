@@ -48,7 +48,7 @@ export function ReviewStart({ data, onComplete }: ReviewStartProps) {
     return (
       <div className="space-y-8">
         <div className="text-center">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3">Stack is running!</h2>
+          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3">Client is running!</h2>
           <p className="text-lg text-muted-foreground">Point your mining devices to the addresses below</p>
         </div>
         <MinerConnectionInfo isJdMode={isJdMode} />
@@ -76,7 +76,7 @@ export function ReviewStart({ data, onComplete }: ReviewStartProps) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3">Review & Start</h2>
-        <p className="text-lg text-muted-foreground">Review your configuration and start the SV2 stack</p>
+        <p className="text-lg text-muted-foreground">Review your configuration and start the SV2 client</p>
       </div>
 
       {error && (

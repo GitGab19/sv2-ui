@@ -13,7 +13,6 @@ import {
   StopCircle,
   Trash2,
 } from 'lucide-react';
-import { PoolIcon } from '@/components/ui/pool-icon';
 
 /**
  * Configuration tab for Settings page.
@@ -97,7 +96,7 @@ export function ConfigurationTab() {
                 <div className="text-sm">
                   <p className="font-medium text-primary mb-1">Not Configured</p>
                   <p className="text-muted-foreground">
-                    No configuration found. Run the setup wizard to configure your mining stack.
+                    No configuration found. Run the setup wizard to configure your mining client.
                   </p>
                 </div>
                 <Button onClick={() => navigate('/setup')}>
@@ -117,13 +116,6 @@ export function ConfigurationTab() {
 
   const isJdMode = mode === 'jd';
   const isSoloMode = miningMode === 'solo';
-
-  const getPoolInfo = (name: string): { url: string | null; logoOnDark: boolean } => {
-    if (name.includes('Braiins'))   return { url: '/braiins.svg',   logoOnDark: true  };
-    if (name.includes('SRI'))       return { url: '/sri-logo.png',  logoOnDark: false };
-    if (name.includes('Blitzpool')) return { url: '/blitzpool.svg', logoOnDark: false };
-    return { url: null, logoOnDark: false };
-  };
 
   return (
     <div className="space-y-6 animate-in slide-in-from-left-2 duration-300">
@@ -232,22 +224,14 @@ export function ConfigurationTab() {
           </div>
 
           {/* Pool */}
-          {config.pool && (() => {
-            const poolInfo = getPoolInfo(config.pool!.name);
-            return (
-              <div className="p-4 rounded-lg border border-border/50 bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <PoolIcon logoUrl={poolInfo.url} logoOnDark={poolInfo.logoOnDark} name={config.pool!.name} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium">{config.pool!.name}</p>
-                    <p className="text-muted-foreground font-mono text-xs">
-                      {config.pool!.address}:{config.pool!.port}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {config.pool && (
+            <div className="p-4 rounded-lg border border-border/50 bg-muted/20">
+              <p className="font-medium">{config.pool.name}</p>
+              <p className="text-muted-foreground font-mono text-xs">
+                {config.pool.address}:{config.pool.port}
+              </p>
+            </div>
+          )}
 
           {/* Username */}
           {(config.translator?.user_identity || config.jdc?.user_identity) && (
