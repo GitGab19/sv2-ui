@@ -123,12 +123,12 @@ export function Shell({ children, appMode = 'translator' }: ShellProps) {
         className="sticky top-0 z-40 shrink-0 bg-background/80 backdrop-blur-md border-b border-border/60"
       >
         {/* Bar */}
-        <div className="mx-auto max-w-7xl h-11 px-4 sm:px-6 flex items-center gap-5">
+        <div className="mx-auto max-w-7xl h-14 px-4 sm:px-6 flex items-center gap-5">
 
           <Logo />
 
           {/* Desktop: nav */}
-          <nav className="hidden sm:flex items-stretch h-11 gap-0 ml-2">
+          <nav className="hidden sm:flex items-stretch h-14 gap-0 ml-2">
             {navItems.map((item) => {
               const isActive =
                 location === item.href ||
