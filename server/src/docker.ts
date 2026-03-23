@@ -301,7 +301,7 @@ async function startTranslator(configPath: string): Promise<void> {
         '9092/tcp': [{ HostPort: '9092' }],
       },
       NetworkMode: NETWORK_NAME,
-      RestartPolicy: { Name: 'unless-stopped' },
+      RestartPolicy: { Name: 'always' },
     },
     ExposedPorts: {
       '34255/tcp': {},
@@ -347,7 +347,7 @@ async function startJdc(
         '9091/tcp': [{ HostPort: '9091' }],
       },
       NetworkMode: NETWORK_NAME,
-      RestartPolicy: { Name: 'unless-stopped' },
+      RestartPolicy: { Name: 'always' },
     },
     ExposedPorts: {
       '34265/tcp': {},
