@@ -12,7 +12,7 @@ export interface PoolConfig {
   authority_public_key: string;
 }
 
-export type OperatingSystem = 'linux' | 'macos';
+export type OperatingSystem = 'linux' | 'macos' | 'windows';
 
 export interface BitcoinConfig {
   network: 'mainnet' | 'testnet4';

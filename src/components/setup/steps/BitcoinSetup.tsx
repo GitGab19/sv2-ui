@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { StepProps, BitcoinConfig, OperatingSystem } from '../types';
-import { Bitcoin, Apple, Terminal, Pencil, Check } from 'lucide-react';
+import { Bitcoin, Apple, Terminal, Monitor, Pencil, Check } from 'lucide-react';
 
 function getDefaultDataDir(os: OperatingSystem): string {
-  return os === 'linux' ? '~/.bitcoin' : '~/Library/Application Support/Bitcoin';
+  switch (os) {
+    case 'linux': return '~/.bitcoin';
+    case 'macos': return '~/Library/Application Support/Bitcoin';
+    case 'windows': return '~/AppData/Roaming/Bitcoin';
+  }
 }
 
 function computeSocketPath(os: OperatingSystem, network: 'mainnet' | 'testnet4', customDataDir: string): string {
@@ -44,7 +48,7 @@ export function BitcoinSetup({ data, updateData, onNext }: StepProps) {
 
       <div role="group" aria-labelledby="os-label">
         <p id="os-label" className="block text-sm font-medium mb-3">Operating System</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => { setOs('linux'); resetPath(); }}
@@ -64,6 +68,16 @@ export function BitcoinSetup({ data, updateData, onNext }: StepProps) {
             {os === 'macos' && <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center" aria-hidden="true"><Check className="w-3 h-3 text-background" /></div>}
             <Apple className="h-5 w-5" aria-hidden="true" />
             <span className={`font-medium text-sm ${os === 'macos' ? 'text-primary' : ''}`}>macOS</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setOs('windows'); resetPath(); }}
+            className={selBtn(os === 'windows')}
+            aria-pressed={os === 'windows'}
+          >
+            {os === 'windows' && <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center" aria-hidden="true"><Check className="w-3 h-3 text-background" /></div>}
+            <Monitor className="h-5 w-5" aria-hidden="true" />
+            <span className={`font-medium text-sm ${os === 'windows' ? 'text-primary' : ''}`}>Windows</span>
           </button>
         </div>
       </div>

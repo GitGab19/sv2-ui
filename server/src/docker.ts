@@ -7,6 +7,8 @@ import Docker from 'dockerode';
 import os from 'os';
 import type { SetupData, ContainerStatus, HealthStatus } from './types.js';
 
+const isWindows = os.platform() === 'win32';
+
 /**
  * Expand ~ to home directory in a path.
  * Uses HOST_HOME env var (passed from docker run) if available,
@@ -15,19 +17,23 @@ import type { SetupData, ContainerStatus, HealthStatus } from './types.js';
 function expandHomePath(inputPath: string): string {
   if (inputPath.startsWith('~')) {
     const home = process.env.HOST_HOME || os.homedir();
-    return inputPath.replace('~', home);
+    const expanded = inputPath.replace('~', home);
+    return isWindows ? expanded.replace(/\//g, '\\') : expanded;
   }
   return inputPath;
 }
-
-const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
-const KNOWN_DOCKER_SOCKET_PATHS = [
-  DEFAULT_DOCKER_SOCKET,
-  '~/.docker/run/docker.sock',
-  '~/Library/Containers/com.docker.docker/Data/docker-cli.sock',
-  '~/.colima/default/docker.sock',
-  '~/.orbstack/run/docker.sock',
-];
+const DEFAULT_DOCKER_SOCKET = isWindows
+  ? '//./pipe/docker_engine'
+  : '/var/run/docker.sock';
+const KNOWN_DOCKER_SOCKET_PATHS = isWindows
+  ? [DEFAULT_DOCKER_SOCKET]
+  : [
+      DEFAULT_DOCKER_SOCKET,
+      '~/.docker/run/docker.sock',
+      '~/Library/Containers/com.docker.docker/Data/docker-cli.sock',
+      '~/.colima/default/docker.sock',
+      '~/.orbstack/run/docker.sock',
+    ];
 
 type DockerConnectionConfig = {
   endpoint: string;
@@ -38,7 +44,11 @@ type DockerConnectionConfig = {
 function listAvailableDockerSockets(): string[] {
   return KNOWN_DOCKER_SOCKET_PATHS
     .map(expandHomePath)
-    .filter((socketPath, index, paths) => paths.indexOf(socketPath) === index && fs.existsSync(socketPath));
+    .filter((socketPath, index, paths) => {
+      if (paths.indexOf(socketPath) !== index) return false;
+      if (isWindows && socketPath.startsWith('//./pipe/')) return true;
+      try { return fs.existsSync(socketPath); } catch { return false; }
+    });
 }
 
 function parseDockerHost(dockerHost: string): DockerConnectionConfig {
@@ -47,6 +57,15 @@ function parseDockerHost(dockerHost: string): DockerConnectionConfig {
     return {
       endpoint: socketPath,
       options: { socketPath },
+      source: `DOCKER_HOST=${dockerHost}`,
+    };
+  }
+
+  if (dockerHost.startsWith('npipe://')) {
+    const pipePath = decodeURIComponent(dockerHost.slice('npipe://'.length)).replace(/\//g, '\\');
+    return {
+      endpoint: pipePath,
+      options: { socketPath: pipePath },
       source: `DOCKER_HOST=${dockerHost}`,
     };
   }

@@ -5,6 +5,7 @@ import { Copy, Check, ExternalLink } from 'lucide-react';
 export function BitcoinPrereqStep({ onNext }: StepProps) {
   const [copiedMainnet, setCopiedMainnet] = useState(false);
   const [copiedTestnet, setCopiedTestnet] = useState(false);
+  const [showWindows, setShowWindows] = useState(false);
 
   const copy = async (text: string, which: 'mainnet' | 'testnet') => {
     try {
@@ -23,6 +24,8 @@ export function BitcoinPrereqStep({ onNext }: StepProps) {
 
   const mainnetCmd = 'bitcoin -m node -ipcbind=unix';
   const testnetCmd = 'bitcoin -m node -ipcbind=unix -testnet4';
+  const mainnetCmdWin = 'bitcoin.exe -m node -ipcbind=unix';
+  const testnetCmdWin = 'bitcoin.exe -m node -ipcbind=unix -testnet4';
 
   return (
     <div className="space-y-8 text-center">
@@ -66,6 +69,23 @@ export function BitcoinPrereqStep({ onNext }: StepProps) {
               Start with IPC enabled
             </div>
 
+            <div className="flex gap-1 mb-3">
+              <button
+                type="button"
+                onClick={() => setShowWindows(false)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${!showWindows ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Linux / macOS
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWindows(true)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${showWindows ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Windows
+              </button>
+            </div>
+
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Mainnet</p>
               <div className="relative">
@@ -73,11 +93,11 @@ export function BitcoinPrereqStep({ onNext }: StepProps) {
                   className="bg-muted/60 p-3 pr-12 rounded-lg text-xs font-mono overflow-x-auto"
                   aria-label="Mainnet start command"
                 >
-                  {mainnetCmd}
+                  {showWindows ? mainnetCmdWin : mainnetCmd}
                 </pre>
                 <button
                   type="button"
-                  onClick={() => copy(mainnetCmd, 'mainnet')}
+                  onClick={() => copy(showWindows ? mainnetCmdWin : mainnetCmd, 'mainnet')}
                   aria-label={copiedMainnet ? 'Copied!' : 'Copy mainnet command'}
                   aria-live="polite"
                   className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
@@ -94,11 +114,11 @@ export function BitcoinPrereqStep({ onNext }: StepProps) {
                   className="bg-muted/60 p-3 pr-12 rounded-lg text-xs font-mono overflow-x-auto"
                   aria-label="Testnet4 start command"
                 >
-                  {testnetCmd}
+                  {showWindows ? testnetCmdWin : testnetCmd}
                 </pre>
                 <button
                   type="button"
-                  onClick={() => copy(testnetCmd, 'testnet')}
+                  onClick={() => copy(showWindows ? testnetCmdWin : testnetCmd, 'testnet')}
                   aria-label={copiedTestnet ? 'Copied!' : 'Copy testnet4 command'}
                   aria-live="polite"
                   className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
