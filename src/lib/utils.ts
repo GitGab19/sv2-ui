@@ -1,6 +1,10 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as bitcoin from 'bitcoinjs-lib';
+import * as ecc from 'tiny-secp256k1';
+
+// Required for taproot (P2TR) address validation
+bitcoin.initEccLib(ecc);
 
 /**
  * Combines class names with Tailwind merge support.
