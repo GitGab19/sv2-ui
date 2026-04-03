@@ -66,7 +66,9 @@ export function HashrateStep({ data, updateData, onNext }: StepProps) {
         min_hashrate: hashrate,
       },
     });
-  }, [hashrate, data.translator, updateData]);
+  // intentionally excluded: data.translator and updateData cause infinite loop when included
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [hashrate]);
 
   return (
     <div className="space-y-8">
@@ -118,7 +120,11 @@ export function HashrateStep({ data, updateData, onNext }: StepProps) {
                 type="number"
                 min="0"
                 value={parseFloat((rawHashrate / multiplier).toPrecision(6))}
-                onChange={(e) => { const v = Number(e.target.value); if (v >= 0) setRawHashrate(v * multiplier); }}
+              onChange={(e) => {
+                const newValue = Number(e.target.value);
+                const newRaw = sliderToRaw(newValue);
+                setRawHashrate(newRaw);
+              }}
                 aria-describedby="hashrate-unit"
                 className="flex-1 h-10 px-3 rounded-lg border border-input bg-background text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 outline-none transition-all"
               />
@@ -137,18 +143,21 @@ export function HashrateStep({ data, updateData, onNext }: StepProps) {
               className="w-full accent-primary"
             />
             <div className="flex justify-between text-xs text-muted-foreground select-none">
-              <span>1 GH/s</span><span>1 TH/s</span><span>100 TH/s</span><span>1 PH/s</span><span>10 PH/s</span>
+              <span>1 GH/s</span><span>8 GH/s</span><span>56 GH/s</span><span>420 GH/s</span><span>3 TH/s</span><span>24 TH/s</span><span>180 TH/s</span><span>1 PH/s</span><span>10 PH/s</span>
             </div>
           </div>
         );
       })()}
 
-      {hashrate > 0 && (
-        <div className="p-4 rounded-xl bg-primary/[0.08] text-center">
-          <div className="text-sm text-muted-foreground mb-1">Starting difficulty for</div>
-          <div className="text-2xl font-semibold text-primary">{formatHashrateDisplay(hashrate)}</div>
-        </div>
-      )}
+      {hashrate > 0 && (() => {
+        const display = formatHashrateDisplay(hashrate);
+        return (
+          <div className="p-4 rounded-xl bg-primary/[0.08] text-center">
+            <div className="text-sm text-muted-foreground mb-1">Starting difficulty for</div>
+            <div className="text-2xl font-semibold text-primary">{display}</div>
+          </div>
+        );
+      })()}
 
       <div className="flex justify-center">
         <button
