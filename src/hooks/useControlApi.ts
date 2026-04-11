@@ -39,6 +39,18 @@ async function setupServices(config: SetupData): Promise<ControlResponse> {
 }
 
 /**
+ * Update configuration and restart (inline edit)
+ */
+async function updateConfigService(updates: Partial<SetupData>): Promise<ControlResponse> {
+  const response = await fetch('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return response.json();
+}
+
+/**
  * Hook for controlling services (stop/restart)
  */
 export function useControlApi() {
@@ -66,15 +78,25 @@ export function useControlApi() {
     },
   });
 
+  const updateConfigMutation = useMutation({
+    mutationFn: updateConfigService,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup-status'] });
+    },
+  });
+
   return {
     stop: stopMutation.mutate,
     restart: restartMutation.mutate,
     setup: setupMutation.mutate,
+    updateConfig: updateConfigMutation.mutate,
     isStoppingOrRestarting: stopMutation.isPending || restartMutation.isPending,
     isSettingUp: setupMutation.isPending,
+    isUpdatingConfig: updateConfigMutation.isPending,
     stopError: stopMutation.error,
     restartError: restartMutation.error,
     setupError: setupMutation.error,
+    updateConfigError: updateConfigMutation.error,
   };
 }
 
