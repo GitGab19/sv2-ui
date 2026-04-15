@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { StepProps, BitcoinConfig, OperatingSystem } from '../types';
-import { Bitcoin, Apple, Terminal, Pencil, Check } from 'lucide-react';
+import { Bitcoin, Apple, Terminal, Pencil, Check, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useBitcoinSocketValidation } from '@/hooks/useBitcoinSocketValidation';
 
 function getDefaultDataDir(os: OperatingSystem): string {
   return os === 'linux' ? '~/.bitcoin' : '~/Library/Application Support/Bitcoin';
@@ -23,6 +24,8 @@ export function BitcoinSetup({ data, updateData, onNext }: StepProps) {
   useEffect(() => {
     updateData({ bitcoin: { os, network, customDataDir, socket_path: socketPath } as BitcoinConfig });
   }, [os, network, customDataDir, socketPath, updateData]);
+
+  const { isChecking, isValid, error: socketError } = useBitcoinSocketValidation(socketPath);
 
   const resetPath = () => { setManualSocketPath(''); setIsEditingPath(false); };
 
@@ -151,13 +154,33 @@ export function BitcoinSetup({ data, updateData, onNext }: StepProps) {
           </button>
         )}
         <p id="socket-path-hint" className="text-xs text-muted-foreground mt-2">Click to edit if your socket is in a different location.</p>
+
+        {isChecking && (
+          <div className="flex items-center gap-2 mt-3 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-xs">Checking socket path...</span>
+          </div>
+        )}
+        {!isChecking && isValid && (
+          <div className="flex items-center gap-2 mt-3 text-sv2-green">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-xs">Socket is listening</span>
+          </div>
+        )}
+        {!isChecking && socketError && (
+          <div className="flex items-start gap-2 mt-3 text-sv2-red">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span className="text-xs">{socketError}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-center">
         <button
           type="button"
           onClick={onNext}
-          className="h-11 px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors font-medium"
+          disabled={!isChecking && !!socketError}
+          className="h-11 px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue
         </button>
