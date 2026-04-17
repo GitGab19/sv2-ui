@@ -12,7 +12,7 @@ const UNKNOWN_USER_REGEX =
 const JDC_BITCOIN_CORE_DISCONNECTED_REGEX =
   /Failed to (create BitcoinCoreToSv2|get response): (CannotConnectToUnixSocket|CapnpError\(Error \{ kind: Disconnected|Disconnected: Peer disconnected)/;
 
-function unknownUserParser(lines: ContainerLogLine[]): LogDiagnostic | null {
+export function unknownUserParser(lines: ContainerLogLine[]): LogDiagnostic | null {
   const matches = lines.filter(
     ({ container, message }) =>
       container === 'translator' && UNKNOWN_USER_REGEX.test(message)
@@ -45,7 +45,7 @@ function unknownUserParser(lines: ContainerLogLine[]): LogDiagnostic | null {
   };
 }
 
-function jdcBitcoinCoreDisconnectedParser(
+export function jdcBitcoinCoreDisconnectedParser(
   lines: ContainerLogLine[]
 ): LogDiagnostic | null {
   const matches = lines.filter(
