@@ -174,6 +174,17 @@ sv2-ui/
 
 - [Monitoring API compatibility](docs/monitoring-api-compatibility.md) - How `sv2-ui` should handle monitoring API changes across supported JDC and Translator Proxy image sets.
 
+## Bitcoin Core Compatibility
+
+| Bitcoin Core | JDC image | Translator Proxy image | Status | Reference |
+|--------------|-----------|------------------------|--------|-----------|
+| 30.2 | `stratumv2/jd_client_sv2:v0.3.4` | `stratumv2/translator_sv2:v0.3.4` | Supported | [`release/v0.1.3`](https://github.com/stratum-mining/sv2-ui/tree/release/v0.1.3) |
+| 31.0 | `stratumv2/jd_client_sv2:v0.4.0` | `stratumv2/translator_sv2:v0.4.0` | WIP | TBD |
+
+## Compatibility Notes
+
+- [Monitoring API compatibility](docs/monitoring-api-compatibility.md) - How `sv2-ui` should handle monitoring API changes across supported JDC and Translator Proxy image sets.
+
 ## Ports
 
 | Port | Service | Description |
