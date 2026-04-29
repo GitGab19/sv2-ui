@@ -48,7 +48,9 @@ function shouldAggregateTranslatorChannels(data: SetupData): boolean {
 }
 
 export function normalizeSetupData(data: SetupData): SetupData {
-  if (!data.translator) return data;
+  if (!data.translator) {
+    return data;
+  }
 
   return {
     ...data,
