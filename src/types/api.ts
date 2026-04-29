@@ -23,6 +23,7 @@ export interface ServerExtendedChannelInfo {
   shares_acknowledged: number;
   shares_submitted: number;
   shares_rejected: number;
+  shares_rejected_by_reason?: Record<string, number>;
   share_work_sum: number;
   best_diff: number;
   blocks_found: number;
@@ -40,6 +41,7 @@ export interface ServerStandardChannelInfo {
   shares_acknowledged: number;
   shares_submitted: number;
   shares_rejected: number;
+  shares_rejected_by_reason?: Record<string, number>;
   share_work_sum: number;
   best_diff: number;
   blocks_found: number;

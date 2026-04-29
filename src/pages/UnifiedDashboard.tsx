@@ -28,7 +28,7 @@ import { isAggregatedTproxyPoolName } from '@/components/setup/poolRules';
 import { useSetupStatus } from '@/hooks/useSetupStatus';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { useLogDiagnostics } from '@/hooks/useLogDiagnostics';
-import { formatHashrate, formatDifficulty } from '@/lib/utils';
+import { formatHashrate, formatDifficulty, formatNumber } from '@/lib/utils';
 import type { Sv1ClientInfo } from '@/types/api';
 
 const RANGE_MS: Record<TimeRange, number> = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 };
@@ -342,7 +342,13 @@ export function UnifiedDashboard() {
   // Shares data from upstream SERVER channels (shares sent TO the Pool)
   const shareStats = useMemo(() => {
     if (!serverChannels) {
-      return { acknowledged: 0, submitted: 0, rejected: 0 };
+      return {
+        acknowledged: 0,
+        submitted: 0,
+        rejected: 0,
+        rejectionReasons: [],
+        unclassifiedRejected: 0,
+      };
     }
     
     const extAcknowledged = serverChannels.extended_channels.reduce((sum, ch) => sum + ch.shares_acknowledged, 0);
@@ -353,11 +359,26 @@ export function UnifiedDashboard() {
 
     const extRejected = serverChannels.extended_channels.reduce((sum, ch) => sum + ch.shares_rejected, 0);
     const stdRejected = serverChannels.standard_channels.reduce((sum, ch) => sum + ch.shares_rejected, 0);
+    const rejectedByReason = new Map<string, number>();
+    const channels = [...serverChannels.extended_channels, ...serverChannels.standard_channels];
+
+    for (const channel of channels) {
+      for (const [reason, count] of Object.entries(channel.shares_rejected_by_reason ?? {})) {
+        rejectedByReason.set(reason, (rejectedByReason.get(reason) ?? 0) + count);
+      }
+    }
+
+    const rejectionReasons = [...rejectedByReason.entries()]
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+    const classifiedRejected = rejectionReasons.reduce((sum, item) => sum + item.count, 0);
     
     return {
       acknowledged: extAcknowledged + stdAcknowledged,
       submitted: extSubmitted + stdSubmitted,
       rejected: extRejected + stdRejected,
+      rejectionReasons,
+      unclassifiedRejected: Math.max(0, extRejected + stdRejected - classifiedRejected),
     };
   }, [serverChannels]);
   const blocksFound = usePersistentBlocksFound(blocksFoundEntries, historyConfigKey);
@@ -553,6 +574,61 @@ export function UnifiedDashboard() {
         {!isSovereignSolo && (
           <StatCard
             title="Share Acceptance"
+            info={
+              shareStats.rejected > 0 ? (
+                <InfoPopover
+                  ariaLabel="Share rejection details"
+                  className="w-96 max-w-[calc(100vw-2rem)]"
+                >
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-medium text-foreground">Rejection details</p>
+                      <p className="mt-1 text-xs">
+                        SubmitSharesError error-code counts reported by the upstream channel
+                        monitoring API.
+                      </p>
+                    </div>
+
+                    {shareStats.rejectionReasons.length > 0 ? (
+                      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                        {shareStats.rejectionReasons.map(({ reason, count }) => {
+                          const percentage = (count / shareStats.rejected) * 100;
+                          return (
+                            <div key={reason} className="rounded-lg bg-muted/45 px-3 py-2">
+                              <div className="flex items-start justify-between gap-3 text-xs">
+                                <span className="min-w-0 break-all font-mono text-foreground">
+                                  {reason}
+                                </span>
+                                <span className="shrink-0 whitespace-nowrap font-mono text-muted-foreground">
+                                  {formatNumber(count)} · {percentage.toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {shareStats.unclassifiedRejected > 0 && (
+                          <div className="rounded-lg bg-muted/45 px-3 py-2">
+                            <div className="flex items-start justify-between gap-3 text-xs">
+                              <span className="min-w-0 break-all font-mono text-foreground">
+                                unknown
+                              </span>
+                              <span className="shrink-0 whitespace-nowrap font-mono text-muted-foreground">
+                                {formatNumber(shareStats.unclassifiedRejected)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg bg-muted/45 px-3 py-2 text-xs">
+                        This sv2-apps image reports rejected shares, but not rejection-code counts
+                        yet.
+                      </p>
+                    )}
+                  </div>
+                </InfoPopover>
+              ) : undefined
+            }
             value={(() => {
               const { submitted, rejected } = shareStats;
               if (submitted === 0) return <span className="text-muted-foreground">—</span>;
