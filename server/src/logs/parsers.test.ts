@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   unknownUserParser,
   jdcBitcoinCoreDisconnectedParser,
+  jdcBitcoinCoreUnsupportedMiningInterfaceParser,
 } from './parsers.js';
 import { collectDiagnostics } from './parsers.js';
 import type { ContainerLogLine } from './types.js';
@@ -165,6 +166,53 @@ test('jdcBitcoinCoreDisconnectedParser collects multiple matches', () => {
 
   assert.ok(result !== null);
   assert.equal(result?.evidence.length, 2);
+});
+
+test('jdcBitcoinCoreUnsupportedMiningInterfaceParser matches old mining interface error', () => {
+  const lines = [
+    createLogLine(
+      'jdc',
+      'jd_client_sv2::template_receiver::bitcoin_core: Failed to create BitcoinCoreToSv2: CapnpError(Error { kind: Failed, extra: "remote exception: std::exception: Old mining interface (@2) not supported. Please update your client!" })'
+    ),
+  ];
+
+  const result = jdcBitcoinCoreUnsupportedMiningInterfaceParser(lines);
+
+  assert.ok(result !== null);
+  assert.equal(result?.code, 'jdc-bitcoin-core-unsupported-mining-interface');
+  assert.equal(result?.severity, 'error');
+  assert.equal(result?.title, 'Bitcoin Core version does not match');
+  assert.deepEqual(result?.containers, ['jdc']);
+  assert.equal(result?.evidence.length, 1);
+  assert.equal(result?.recommendation, 'Open setup and select your actual Bitcoin Core version.');
+});
+
+test('jdcBitcoinCoreUnsupportedMiningInterfaceParser returns null for wrong container', () => {
+  const lines = [
+    createLogLine(
+      'translator',
+      'Failed to create BitcoinCoreToSv2: CapnpError(Error { kind: Failed, extra: "remote exception: std::exception: Old mining interface (@2) not supported. Please update your client!" })'
+    ),
+  ];
+
+  const result = jdcBitcoinCoreUnsupportedMiningInterfaceParser(lines);
+
+  assert.equal(result, null);
+});
+
+test('collectDiagnostics includes Bitcoin Core version mismatch diagnostics', () => {
+  const lines = [
+    createLogLine(
+      'jdc',
+      'jd_client_sv2::template_receiver::bitcoin_core: Failed to create BitcoinCoreToSv2: CapnpError(Error { kind: Failed, extra: "remote exception: std::exception: Old mining interface (@2) not supported. Please update your client!" })'
+    ),
+  ];
+
+  const diagnostics = collectDiagnostics(lines);
+
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0]?.code, 'jdc-bitcoin-core-unsupported-mining-interface');
+  assert.equal(diagnostics[0]?.message, 'The Bitcoin Core version selected in setup does not match the node that is running.');
 });
 
 test('invalidCertificateParser: detects InvalidCertificate in translator', () => {
