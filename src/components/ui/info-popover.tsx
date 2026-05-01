@@ -5,9 +5,11 @@ import { cn } from '@/lib/utils';
 
 interface InfoPopoverProps {
   children: React.ReactNode;
+  className?: string;
+  ariaLabel?: string;
 }
 
-export function InfoPopover({ children }: InfoPopoverProps) {
+export function InfoPopover({ children, className, ariaLabel = 'More information' }: InfoPopoverProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -15,7 +17,7 @@ export function InfoPopover({ children }: InfoPopoverProps) {
       <Popover.Trigger asChild>
         <button
           className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="More information"
+          aria-label={ariaLabel}
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
           onClick={() => setOpen(prev => !prev)}
@@ -32,6 +34,7 @@ export function InfoPopover({ children }: InfoPopoverProps) {
             'glass-overlay z-50 w-72 px-3 py-2 text-sm text-muted-foreground shadow-md',
             'animate-in fade-in-0 zoom-in-95',
             'data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
+            className,
           )}
         >
           {children}
