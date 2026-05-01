@@ -50,7 +50,20 @@ function clearPersistedDashboardState() {
   });
 }
 
-type EditingField = null | 'pool' | 'mode' | 'identity';
+type EditingField = null | 'pool' | 'mode' | 'identity' | 'signature' | 'advanced';
+
+const DEFAULT_SHARES_PER_MINUTE = 6;
+const DEFAULT_DOWNSTREAM_EXTRANONCE2_SIZE = 4;
+
+function isPositiveNumber(value: string): boolean {
+  const parsed = Number(value);
+  return value.trim() !== '' && Number.isFinite(parsed) && parsed > 0;
+}
+
+function isPositiveInteger(value: string): boolean {
+  const parsed = Number(value);
+  return isPositiveNumber(value) && Number.isInteger(parsed);
+}
 
 /**
  * Configuration tab for Settings page.
@@ -61,7 +74,13 @@ export function ConfigurationTab() {
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<SetupData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { isOrchestrated, isConfigured, isRunning, miningMode, mode } = useSetupStatus();
+  const {
+    isOrchestrated,
+    isConfigured,
+    isRunning,
+    miningMode: statusMiningMode,
+    mode: statusMode,
+  } = useSetupStatus();
   const {
     stop,
     restart,
@@ -78,6 +97,11 @@ export function ConfigurationTab() {
   const [isCustomPool, setIsCustomPool] = useState(false);
   const [editMode, setEditMode] = useState<'jd' | 'no-jd' | null>(null);
   const [editIdentity, setEditIdentity] = useState<string>('');
+  const [editSignature, setEditSignature] = useState<string>('');
+  const [editAdvanced, setEditAdvanced] = useState<{
+    shares_per_minute: string;
+    downstream_extranonce2_size: string;
+  } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const clearDashboardClientState = () => {
@@ -146,7 +170,7 @@ export function ConfigurationTab() {
 
   const startEditPool = () => {
     if (!config?.pool) return;
-    const availablePools = getPoolsForMode(miningMode, mode);
+    const availablePools = getPoolsForMode(config.miningMode, config.mode);
     const matchesPreset = availablePools.some(p => p.address === config.pool?.address && p.port === config.pool?.port);
     setIsCustomPool(!matchesPreset);
     setEditPool({ ...config.pool });
@@ -154,7 +178,7 @@ export function ConfigurationTab() {
   };
 
   const startEditMode = () => {
-    setEditMode(mode ?? 'no-jd');
+    setEditMode(config?.mode ?? statusMode ?? 'no-jd');
     setEditing('mode');
   };
 
@@ -163,12 +187,30 @@ export function ConfigurationTab() {
     setEditing('identity');
   };
 
+  const startEditSignature = (currentValue: string) => {
+    setEditSignature(currentValue);
+    setEditing('signature');
+  };
+
+  const startEditAdvanced = () => {
+    if (!config?.translator) return;
+    setEditAdvanced({
+      shares_per_minute: String(config.translator.shares_per_minute ?? DEFAULT_SHARES_PER_MINUTE),
+      downstream_extranonce2_size: String(
+        config.translator.downstream_extranonce2_size ?? DEFAULT_DOWNSTREAM_EXTRANONCE2_SIZE,
+      ),
+    });
+    setEditing('advanced');
+  };
+
   const cancelEdit = () => {
     setEditing(null);
     setEditPool(null);
     setIsCustomPool(false);
     setEditMode(null);
     setEditIdentity('');
+    setEditSignature('');
+    setEditAdvanced(null);
   };
 
   const isPoolValid =
@@ -176,6 +218,11 @@ export function ConfigurationTab() {
     !!editPool?.authority_public_key &&
     isValidPoolAuthorityPubkey(editPool.authority_public_key);
   const isIdentityValid = isTomlSafeIdentifier(editIdentity);
+  const isSignatureValid = editSignature === '' || isTomlSafeIdentifier(editSignature);
+  const isAdvancedValid =
+    !!editAdvanced &&
+    isPositiveNumber(editAdvanced.shares_per_minute) &&
+    isPositiveInteger(editAdvanced.downstream_extranonce2_size);
 
   const saveEdit = () => {
     if (!config) return;
@@ -202,11 +249,26 @@ export function ConfigurationTab() {
       if (config.jdc) {
         updated.jdc = { ...config.jdc, user_identity: trimmed };
       }
+    } else if (editing === 'signature') {
+      if (!isSignatureValid || !config.jdc) return;
+      updated.jdc = { ...config.jdc, jdc_signature: editSignature.trim() };
+    } else if (editing === 'advanced') {
+      if (!isAdvancedValid || !config.translator || !editAdvanced) return;
+      updated.translator = {
+        ...config.translator,
+        enable_vardiff: true,
+        shares_per_minute: Number(editAdvanced.shares_per_minute),
+        downstream_extranonce2_size: Number(editAdvanced.downstream_extranonce2_size),
+      };
     }
 
     setup(updated, {
-      onSuccess: () => {
-        setConfig(updated);
+      onSuccess: async (response) => {
+        if (!response.success) return;
+
+        await queryClient.invalidateQueries({ queryKey: ['setup-status'] });
+        const refreshedConfig = await getCurrentConfig();
+        setConfig(refreshedConfig ?? updated);
         cancelEdit();
         setSaveSuccess(true);
       },
@@ -262,8 +324,10 @@ export function ConfigurationTab() {
     return <div className="text-center text-muted-foreground py-8">Loading configuration...</div>;
   }
 
-  const isJdMode = mode === 'jd';
-  const isSoloMode = miningMode === 'solo';
+  const activeMiningMode = config.miningMode ?? statusMiningMode;
+  const activeMode = config.mode ?? statusMode;
+  const isJdMode = activeMode === 'jd';
+  const isSoloMode = activeMiningMode === 'solo';
   const isSovereignSolo = isSoloMode && isJdMode;
   const templateModeLabel = isSoloMode
     ? isJdMode
@@ -272,7 +336,7 @@ export function ConfigurationTab() {
     : isJdMode
       ? 'Custom Templates (Job Declaration)'
       : 'Pool Templates';
-  const pools = getPoolsForMode(miningMode, mode);
+  const pools = getPoolsForMode(activeMiningMode, activeMode);
   const isSaving = isSettingUp;
 
   return (
@@ -363,7 +427,7 @@ export function ConfigurationTab() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
+            <div className="space-y-1.5">
               <CardTitle>Current Configuration</CardTitle>
               <CardDescription>Your active mining client setup. Click the edit icon to change a setting.</CardDescription>
             </div>
@@ -644,6 +708,124 @@ export function ConfigurationTab() {
               />
             );
           })()}
+
+          {/* Miner Signature (JD mode) */}
+          {isJdMode && config.jdc && (
+            <ConfigRow
+              label="Miner Signature"
+              editing={editing === 'signature'}
+              onEdit={() => startEditSignature(config.jdc?.jdc_signature || '')}
+              onSave={saveEdit}
+              onCancel={cancelEdit}
+              isSaving={isSaving}
+              saveDisabled={!isSignatureValid}
+              disabled={editing !== null && editing !== 'signature'}
+              display={
+                <div className="space-y-1">
+                  <p className="font-mono text-xs text-muted-foreground truncate">
+                    {config.jdc.jdc_signature || (isSovereignSolo ? config.jdc.user_identity : 'Not set')}
+                  </p>
+                  {isSovereignSolo && !config.jdc.jdc_signature && (
+                    <p className="text-xs text-muted-foreground">Defaults to miner identity</p>
+                  )}
+                </div>
+              }
+              editContent={
+                <div>
+                  <input
+                    type="text"
+                    value={editSignature}
+                    onChange={(e) => setEditSignature(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isSignatureValid && !isSaving) saveEdit();
+                      if (e.key === 'Escape') cancelEdit();
+                    }}
+                    autoFocus
+                    autoComplete="off"
+                    placeholder="Miner signature"
+                    className="w-full h-10 px-3 rounded-lg border border-input bg-background font-mono text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 outline-none transition-all"
+                  />
+                  {editSignature && getIdentifierError(editSignature) && (
+                    <p className="text-xs text-destructive mt-1">{getIdentifierError(editSignature)}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Miner-chosen tag shown in coinbase transactions on block explorers.
+                  </p>
+                </div>
+              }
+            />
+          )}
+
+          {/* Advanced mining configuration */}
+          {config.translator && (
+            <ConfigRow
+              label="Advanced Mining Config"
+              editing={editing === 'advanced'}
+              onEdit={startEditAdvanced}
+              onSave={saveEdit}
+              onCancel={cancelEdit}
+              isSaving={isSaving}
+              saveDisabled={!isAdvancedValid}
+              disabled={editing !== null && editing !== 'advanced'}
+              display={
+                <div className="grid gap-1 text-xs text-muted-foreground">
+                  <p>
+                    Shares/min:{' '}
+                    <span className="font-mono text-foreground">
+                      {config.translator.shares_per_minute ?? DEFAULT_SHARES_PER_MINUTE}
+                    </span>
+                  </p>
+                  <p>
+                    Downstream extranonce2:{' '}
+                    <span className="font-mono text-foreground">
+                      {config.translator.downstream_extranonce2_size ?? DEFAULT_DOWNSTREAM_EXTRANONCE2_SIZE}
+                    </span>
+                  </p>
+                </div>
+              }
+              editContent={
+                editAdvanced && (
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="edit-shares-per-minute" className="block text-xs font-medium mb-1">
+                        Shares Per Minute
+                      </label>
+                      <input
+                        id="edit-shares-per-minute"
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editAdvanced.shares_per_minute}
+                        onChange={(e) => setEditAdvanced({ ...editAdvanced, shares_per_minute: e.target.value })}
+                        className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 outline-none transition-all"
+                      />
+                      {!isPositiveNumber(editAdvanced.shares_per_minute) && (
+                        <p className="text-xs text-destructive mt-1">Enter a value greater than 0.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="edit-downstream-extranonce2-size" className="block text-xs font-medium mb-1">
+                        Downstream Extranonce2 Size
+                      </label>
+                      <input
+                        id="edit-downstream-extranonce2-size"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={editAdvanced.downstream_extranonce2_size}
+                        onChange={(e) => setEditAdvanced({ ...editAdvanced, downstream_extranonce2_size: e.target.value })}
+                        className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 outline-none transition-all"
+                      />
+                      {!isPositiveInteger(editAdvanced.downstream_extranonce2_size) && (
+                        <p className="text-xs text-destructive mt-1">Enter a whole number greater than 0.</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
+            />
+          )}
 
           {/* Bitcoin Core (JD mode) */}
           {isJdMode && config.bitcoin && (
