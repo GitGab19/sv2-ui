@@ -76,6 +76,8 @@ function computeSteps(data: SetupData): SetupStep[] {
   return steps;
 }
 
+const SETUP_TARGET_STEP_STORAGE_KEY = 'sv2-ui-setup-target-step';
+
 export function SetupWizard() {
   const { isDark, toggle } = useTheme();
   const [, navigate] = useLocation();
@@ -92,7 +94,17 @@ export function SetupWizard() {
 
   useEffect(() => {
     getCurrentConfig().then(config => {
-      if (config) { setData(config); setIsReconfiguring(true); }
+      if (config) {
+        setData(config);
+        setIsReconfiguring(true);
+
+        const targetStep = window.sessionStorage.getItem(SETUP_TARGET_STEP_STORAGE_KEY) as SetupStep | null;
+        window.sessionStorage.removeItem(SETUP_TARGET_STEP_STORAGE_KEY);
+
+        if (targetStep && computeSteps(config).includes(targetStep)) {
+          setCurrentStep(targetStep);
+        }
+      }
       setLoadingConfig(false);
     });
   }, []);

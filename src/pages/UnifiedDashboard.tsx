@@ -39,6 +39,7 @@ const RANGE_DESCRIPTIONS: Record<TimeRange, string> = {
   '1h': 'Last hour · sampled every 5 seconds',
 };
 const BITCOIN_CORE_VERSION_MISMATCH_CODE = 'jdc-bitcoin-core-unsupported-mining-interface';
+const SETUP_TARGET_STEP_STORAGE_KEY = 'sv2-ui-setup-target-step';
 
 function normalizeUserIdentity(userIdentity: string) {
   return userIdentity.trim().toLowerCase();
@@ -542,6 +543,7 @@ export function UnifiedDashboard() {
             {showReconfigureButton && (
               <Link
                 href="/setup"
+                onClick={() => window.sessionStorage.setItem(SETUP_TARGET_STEP_STORAGE_KEY, 'bitcoin')}
                 className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-red-500 px-4 font-medium text-white transition-colors hover:bg-red-600 sm:ml-4"
               >
                 Reconfigure
