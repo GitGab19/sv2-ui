@@ -159,6 +159,144 @@ export function getDockerConnectionInfo(): DockerConnectionConfig {
   return dockerConnection;
 }
 
+export function isRunningInsideDocker(): boolean {
+  return isRunningInDocker;
+}
+
+export type BitcoinSocketValidationResult =
+  | { valid: true }
+  | { valid: false; error: string };
+
+async function getCurrentContainerImage(): Promise<string> {
+  const configuredImage = process.env.SV2_UI_VALIDATOR_IMAGE?.trim();
+  if (configuredImage) {
+    return configuredImage;
+  }
+
+  try {
+    const self = await docker.getContainer(os.hostname()).inspect();
+    if (self.Config?.Image) {
+      return self.Config.Image;
+    }
+  } catch (error) {
+    console.warn('Could not inspect sv2-ui container image for socket validation:', error);
+  }
+
+  return 'stratumv2/sv2-ui:latest';
+}
+
+const BITCOIN_SOCKET_VALIDATOR_SCRIPT = `
+const net = require('net');
+
+const socketPath = process.argv[1];
+const timeoutMs = Number(process.argv[2] || 1000);
+const displayPath = process.argv[3] || socketPath;
+const socket = net.createConnection({ path: socketPath });
+let settled = false;
+
+function finish(ok, message) {
+  if (settled) return;
+  settled = true;
+  socket.destroy();
+  if (!ok && message) console.error(message);
+  process.exit(ok ? 0 : 1);
+}
+
+socket.setTimeout(timeoutMs);
+socket.once('connect', () => finish(true));
+socket.once('timeout', () => finish(false, 'Socket did not respond within ' + timeoutMs + 'ms. Bitcoin Core may be unresponsive.'));
+socket.once('error', (err) => {
+  switch (err.code) {
+    case 'ENOENT':
+      finish(false, 'Socket not found at ' + displayPath + '. Make sure Bitcoin Core is running with IPC enabled.');
+      break;
+    case 'ECONNREFUSED':
+      finish(false, 'Socket file exists at ' + displayPath + ' but nothing is listening. Bitcoin Core may have crashed or been stopped.');
+      break;
+    case 'EACCES':
+      finish(false, 'Permission denied for ' + displayPath + '. Check that the sv2-ui process can read this file.');
+      break;
+    case 'ENOTSOCK':
+      finish(false, 'Path ' + displayPath + ' is not a Unix socket.');
+      break;
+    default:
+      finish(false, err.message || 'Unknown error connecting to socket');
+  }
+});
+`;
+
+/**
+ * When sv2-ui runs in Docker, host paths such as ~/.bitcoin/node.sock are not
+ * visible inside the sv2-ui container. Validate the socket through Docker by
+ * bind-mounting the host socket into a short-lived helper container.
+ */
+export async function probeHostBitcoinSocketWithDocker(
+  socketPath: string,
+  timeoutMs = 1000
+): Promise<BitcoinSocketValidationResult> {
+  refreshDockerConnection();
+
+  const helperSocketPath = '/tmp/sv2-bitcoin-node.sock';
+  let container: Docker.Container | null = null;
+
+  try {
+    const image = await getCurrentContainerImage();
+    container = await docker.createContainer({
+      Image: image,
+      Entrypoint: ['node'],
+      Cmd: ['-e', BITCOIN_SOCKET_VALIDATOR_SCRIPT, helperSocketPath, String(timeoutMs), socketPath],
+      AttachStdout: true,
+      AttachStderr: true,
+      HostConfig: {
+        NetworkMode: 'none',
+        Mounts: [
+          {
+            Type: 'bind',
+            Source: socketPath,
+            Target: helperSocketPath,
+            ReadOnly: true,
+          },
+        ],
+        RestartPolicy: { Name: 'no' },
+      },
+    });
+
+    await container.start();
+    const result = await container.wait();
+
+    if (result.StatusCode === 0) {
+      return { valid: true };
+    }
+
+    const rawLogs = await container.logs({ stdout: true, stderr: true });
+    const message = demuxDockerLogBuffer(Buffer.isBuffer(rawLogs) ? rawLogs : Buffer.from(rawLogs))
+      .map((chunk) => chunk.payload.trim())
+      .filter(Boolean)
+      .join('\n');
+
+    return {
+      valid: false,
+      error: message || `Socket validation failed for ${socketPath}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      valid: false,
+      error: message.includes('bind source path does not exist')
+        ? `Socket not found at ${socketPath}. Make sure Bitcoin Core is running with IPC enabled.`
+        : message,
+    };
+  } finally {
+    if (container) {
+      try {
+        await container.remove({ force: true });
+      } catch {
+        // Best effort cleanup for short-lived validation containers.
+      }
+    }
+  }
+}
+
 const LOG_CONTAINER_NAMES: Record<LogContainerRole, string> = {
   translator: TRANSLATOR_CONTAINER,
   jdc: JDC_CONTAINER,

@@ -22,7 +22,9 @@ import {
   ensureDockerAvailable,
   getDockerConnectionInfo,
   expandHomePath,
-  readContainerLogs
+  readContainerLogs,
+  isRunningInsideDocker,
+  probeHostBitcoinSocketWithDocker
 } from './docker.js';
 import { getLogDiagnostics, getLogStreams, readCollatedLogLines } from './logs/diagnostics.js';
 
@@ -193,10 +195,25 @@ app.post('/api/validate/bitcoin-socket', async (req, res) => {
     return res.status(400).json({ valid: false, error: 'socket_path is required' });
   }
 
-  const resolved = expandHomePath(socket_path);
-  const result = await probeUnixSocket(resolved);
+  const result = await validateBitcoinSocket(socket_path);
   return res.json(result);
 });
+
+async function validateBitcoinSocket(socketPath: string): Promise<{ valid: true } | { valid: false; error: string }> {
+  const resolved = expandHomePath(socketPath);
+  return isRunningInsideDocker()
+    ? await probeHostBitcoinSocketWithDocker(resolved)
+    : await probeUnixSocket(resolved);
+}
+
+async function getBitcoinSocketStartupError(data: SetupData): Promise<string | null> {
+  if (data.mode !== 'jd' || !data.bitcoin) {
+    return null;
+  }
+
+  const result = await validateBitcoinSocket(data.bitcoin.socket_path);
+  return result.valid ? null : result.error;
+}
 
 /**
  * PUT /api/config - Update configuration and restart with new values
@@ -238,6 +255,11 @@ app.put('/api/config', async (req, res) => {
     }
 
     await ensureDockerAvailable();
+
+    const bitcoinSocketError = await getBitcoinSocketStartupError(newData);
+    if (bitcoinSocketError) {
+      return res.status(400).json({ success: false, error: bitcoinSocketError });
+    }
 
     await fs.mkdir(CONFIG_DIR, { recursive: true });
 
@@ -368,6 +390,11 @@ app.post('/api/setup', async (req, res) => {
 
     await ensureDockerAvailable();
 
+    const bitcoinSocketError = await getBitcoinSocketStartupError(data);
+    if (bitcoinSocketError) {
+      return res.status(400).json({ success: false, error: bitcoinSocketError });
+    }
+
     // Generate config files
     await fs.mkdir(CONFIG_DIR, { recursive: true });
 
@@ -455,6 +482,13 @@ app.post('/api/restart', async (_req, res) => {
     const bitcoinCoreVersionError = getBitcoinCoreVersionError(state.data);
     if (bitcoinCoreVersionError) {
       return res.status(400).json({ success: false, error: bitcoinCoreVersionError });
+    }
+
+    await ensureDockerAvailable();
+
+    const bitcoinSocketError = await getBitcoinSocketStartupError(state.data);
+    if (bitcoinSocketError) {
+      return res.status(400).json({ success: false, error: bitcoinSocketError });
     }
 
     await stopStack();
