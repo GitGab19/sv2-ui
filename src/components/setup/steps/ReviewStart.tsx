@@ -12,6 +12,23 @@ interface ReviewStartProps extends StepProps {
   onGoToStep: (step: SetupStep) => void;
 }
 
+async function confirmStackStarted(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5_000);
+
+  try {
+    const response = await fetch("/api/status", { signal: controller.signal });
+    if (!response.ok) return false;
+
+    const status = await response.json();
+    return status.configured === true && status.running === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export function ReviewStart({ data, onComplete, onGoToStep }: ReviewStartProps) {
   const queryClient = useQueryClient();
   const [isStarting, setIsStarting] = useState(false);
@@ -65,6 +82,18 @@ export function ReviewStart({ data, onComplete, onGoToStep }: ReviewStartProps) 
     } catch (err) {
       let message = "Failed to start services";
       if (err instanceof Error) {
+        const mayHaveStarted =
+          err.name === "AbortError" ||
+          err.message.includes("fetch") ||
+          err.message.includes("Network");
+
+        if (mayHaveStarted && await confirmStackStarted()) {
+          await queryClient.invalidateQueries({ queryKey: ["setup-status"] });
+          setStarted(true);
+          setIsStarting(false);
+          return;
+        }
+
         if (err.name === "AbortError") {
           message =
             "Request timed out. The containers may still be starting — check the terminal.";
