@@ -1,16 +1,35 @@
 import React, { useState, useEffect } from "react";
-import { StepProps } from "../types";
+import { SetupStep, StepProps } from "../types";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MinerConnectionInfo } from "../MinerConnectionInfo";
 import { shouldAggregateTranslatorChannels } from "../poolRules";
+import { isBitcoinSocketError } from "@/lib/bitcoinSocketErrors";
 import { formatHashrate } from "@/lib/utils";
 
 interface ReviewStartProps extends StepProps {
   onComplete: () => void;
+  onGoToStep: (step: SetupStep) => void;
 }
 
-export function ReviewStart({ data, onComplete }: ReviewStartProps) {
+async function confirmStackStarted(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5_000);
+
+  try {
+    const response = await fetch("/api/status", { signal: controller.signal });
+    if (!response.ok) return false;
+
+    const status = await response.json();
+    return status.configured === true && status.running === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export function ReviewStart({ data, onComplete, onGoToStep }: ReviewStartProps) {
   const queryClient = useQueryClient();
   const [isStarting, setIsStarting] = useState(false);
   const [started, setStarted] = useState(false);
@@ -31,6 +50,7 @@ export function ReviewStart({ data, onComplete }: ReviewStartProps) {
       : "Pool Templates";
   const isAggregatedTproxy =
     !isSoloMode && shouldAggregateTranslatorChannels(data.pool);
+  const showBitcoinSetupButton = isJdMode && isBitcoinSocketError(error);
 
   let sectionCount = 0;
   const nextSection = () => (++sectionCount).toString();
@@ -62,6 +82,18 @@ export function ReviewStart({ data, onComplete }: ReviewStartProps) {
     } catch (err) {
       let message = "Failed to start services";
       if (err instanceof Error) {
+        const mayHaveStarted =
+          err.name === "AbortError" ||
+          err.message.includes("fetch") ||
+          err.message.includes("Network");
+
+        if (mayHaveStarted && await confirmStackStarted()) {
+          await queryClient.invalidateQueries({ queryKey: ["setup-status"] });
+          setStarted(true);
+          setIsStarting(false);
+          return;
+        }
+
         if (err.name === "AbortError") {
           message =
             "Request timed out. The containers may still be starting — check the terminal.";
@@ -164,6 +196,18 @@ export function ReviewStart({ data, onComplete }: ReviewStartProps) {
               Error
             </div>
             <div className="text-sm text-muted-foreground">{error}</div>
+            {showBitcoinSetupButton && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  onGoToStep("bitcoin");
+                }}
+                className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30"
+              >
+                Open Bitcoin Setup
+              </button>
+            )}
           </div>
         </div>
       )}
