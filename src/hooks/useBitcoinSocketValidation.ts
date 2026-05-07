@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { isRetryableBitcoinSocketError } from '@/lib/bitcoinSocketErrors';
 
 interface SocketValidationResult {
   valid: boolean;
@@ -41,21 +42,30 @@ export function useBitcoinSocketValidation(socketPath: string, debounceMs = 800)
     return () => clearTimeout(t);
   }, [socketPath, debounceMs]);
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: ['bitcoin-socket-validation', debouncedPath],
     queryFn: () => validateSocket(debouncedPath),
     enabled: !!debouncedPath,
-    staleTime: 10_000,
+    staleTime: 0,
     retry: false,
+    refetchOnMount: 'always',
+    refetchInterval: (query) => {
+      const result = query.state.data as SocketValidationResult | null | undefined;
+      return result && !result.valid && isRetryableBitcoinSocketError(result.error) ? 5_000 : false;
+    },
     refetchOnWindowFocus: false,
   });
 
   const isPathStale = debouncedPath !== socketPath;
+  const isRetryable = data && !data.valid ? isRetryableBitcoinSocketError(data.error) : false;
 
   return {
     isChecking: isFetching || isPathStale,
+    isRefreshing: isFetching && !!data,
     isValid: data?.valid === true,
     error: data && !data.valid ? data.error : undefined,
+    isRetryable,
+    retry: () => refetch(),
     skipped: data === null,
   };
 }
