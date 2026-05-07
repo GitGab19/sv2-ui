@@ -4,6 +4,7 @@ const BITCOIN_SOCKET_ERROR_PATTERNS = [
   'Socket did not respond',
   'Permission denied for',
   'is not a Unix socket',
+  'Bitcoin Core version does not match',
 ];
 
 function getErrorMessage(error?: string | Error | null): string {
