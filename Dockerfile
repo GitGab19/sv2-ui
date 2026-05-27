@@ -32,11 +32,14 @@ COPY --from=builder /app/dist ./public
 COPY --from=builder /app/server/dist ./dist
 COPY --from=builder /app/server/package.json ./
 
-# Copy shared config (ports.json)
+# Copy shared source (Node 24 loads .ts natively)
 COPY --from=builder /app/shared ./shared
 
 # Install production dependencies only
 RUN npm install --omit=dev
+
+# Create a symlink so @sv2-ui/shared resolves at runtime
+RUN mkdir -p /app/node_modules/@sv2-ui && ln -s ../../shared /app/node_modules/@sv2-ui/shared
 
 # Create data directory for configs
 RUN mkdir -p /app/data/config
@@ -51,4 +54,4 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 EXPOSE 8080
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "--import", "tsx", "dist/index.js"]
