@@ -10,6 +10,7 @@ import type { BitcoinCoreVersion, OperatingSystem, BitcoinNetwork } from '@sv2-u
 import { BITCOIN_MESSAGES } from '@/lib/messages';
 import { StepProps, BitcoinConfig } from '../types';
 import { Bitcoin, Apple, Terminal, Pencil, Check, Loader2, AlertCircle, CheckCircle2, RotateCw } from 'lucide-react';
+import { UmbrelIcon } from '../icons/UmbrelIcon';
 import { useBitcoinSocketValidation } from '@/hooks/useBitcoinSocketValidation';
 import type { BitcoinRpcDiscoveryResult } from '@/hooks/useBitcoinRpcDiscovery';
 
@@ -109,7 +110,7 @@ export function BitcoinSetup({ data, updateData, onNext, notice, onDismissNotice
 
       <div role="group" aria-labelledby="os-label">
         <p id="os-label" className="block text-sm font-medium mb-3">Operating System</p>
-        <div className={`grid gap-3 ${osPrefilled.current && !showAllOsOptions ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className={`grid gap-3 ${osPrefilled.current && !showAllOsOptions ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
           {(osPrefilled.current && !showAllOsOptions ? os === 'linux' : true) && (
             <button
               type="button"
@@ -132,6 +133,18 @@ export function BitcoinSetup({ data, updateData, onNext, notice, onDismissNotice
               {os === 'macos' && <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center" aria-hidden="true"><Check className="w-3 h-3 text-background" /></div>}
               <Apple className="h-5 w-5" aria-hidden="true" />
               <span className={`font-medium text-sm ${os === 'macos' ? 'text-primary' : ''}`}>macOS</span>
+            </button>
+          )}
+          {(osPrefilled.current && !showAllOsOptions ? os === 'umbrel' : true) && (
+            <button
+              type="button"
+              onClick={() => { setOs('umbrel'); resetPath(); }}
+              className={selBtn(os === 'umbrel')}
+              aria-pressed={os === 'umbrel'}
+            >
+              {os === 'umbrel' && <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center" aria-hidden="true"><Check className="w-3 h-3 text-background" /></div>}
+              <UmbrelIcon />
+              <span className={`font-medium text-sm ${os === 'umbrel' ? 'text-primary' : ''}`}>Umbrel</span>
             </button>
           )}
         </div>
@@ -192,6 +205,19 @@ export function BitcoinSetup({ data, updateData, onNext, notice, onDismissNotice
           </p>
         )}
       </div>
+      {os === 'umbrel' && coreVersion && !isChecking && socketError && (
+        <div className="p-3 rounded-xl bg-warning/[0.08] text-sm text-warning flex gap-2 items-start">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">Umbrel Setup Instructions</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>Make sure your Bitcoin Umbrel app is at version <strong>1.3.0</strong> or higher</li>
+              <li>To activate the IPC in your Umbrel node go to <strong>Settings → Interfaces</strong> tab</li>
+              <li>Enable <strong>IPC Mining Interface</strong></li>
+            </ul>
+          </div>
+        </div>
+      )}
 
       <div role="group" aria-labelledby="network-label">
         <p id="network-label" className="block text-sm font-medium mb-3">Bitcoin Network</p>
@@ -320,6 +346,7 @@ export function BitcoinSetup({ data, updateData, onNext, notice, onDismissNotice
           </div>
         )}
       </div>
+
 
       <div className="flex justify-center">
         <button

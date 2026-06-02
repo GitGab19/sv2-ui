@@ -30,5 +30,6 @@ export function mapHostOsToOperatingSystem(hostOs: string): OperatingSystem | nu
   const normalized = hostOs.toLowerCase();
   if (normalized === 'linux') return 'linux';
   if (normalized === 'macos') return 'macos';
+  if (normalized === 'umbrel') return 'umbrel';
   return null;
 }
